@@ -14,13 +14,13 @@ The purpose is more to have resilience if one provider fails, rather than having
 ## Installation
 
 ```bash
-npm install @adrastia-oracle//ethers-v6-fallback-provider
+npm install @adrastia-oracle/ethers-v6-fallback-provider
 ```
 
 or
 
 ```bash
-yarn add @adrastia-oracle//ethers-v6-fallback-provider
+yarn add @adrastia-oracle/ethers-v6-fallback-provider
 ```
 
 ## Usage
