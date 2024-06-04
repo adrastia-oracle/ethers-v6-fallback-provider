@@ -1,7 +1,7 @@
 import { JsonRpcApiProvider, JsonRpcError, JsonRpcPayload, JsonRpcResult, Network } from "ethers";
 
 export default class MockProvider extends JsonRpcApiProvider {
-    constructor(protected _id: string, protected _networkId = 1) {
+    constructor(protected _id: string, protected _networkId = 1, protected _blockNumber = 1) {
         super(_networkId);
     }
 
@@ -14,10 +14,18 @@ export default class MockProvider extends JsonRpcApiProvider {
         });
     }
 
+    async sendNonBlockNumberCall(method: string, params: { [name: string]: any }): Promise<any> {
+        return this._id;
+    }
+
     async send(method: string, params: { [name: string]: any }): Promise<any> {
         this._start();
 
-        return this._id;
+        if (method === "eth_blockNumber") {
+            return this._blockNumber;
+        }
+
+        return await this.sendNonBlockNumberCall(method, params);
     }
 
     async _send(payload: JsonRpcPayload | Array<JsonRpcPayload>): Promise<Array<JsonRpcResult | JsonRpcError>> {
