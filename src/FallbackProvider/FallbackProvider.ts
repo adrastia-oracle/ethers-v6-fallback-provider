@@ -75,7 +75,7 @@ export type FallbackProviderOptions = {
      * @returns A timestamp of when the block (or the latest block) was discovered, in UNIX epoch time. If the block is
      * new, `null` is returned.
      */
-    getBlockDiscoveryTime?: (blockNumber: number) => Promise<number | null> | undefined;
+    getBlockDiscoveryTime?: (blockNumber: number) => Promise<number | null>;
 
     /**
      * A function that allows the provider to set the time at which a block was first discovered. If the function is not
@@ -86,7 +86,7 @@ export type FallbackProviderOptions = {
      * @param currentTime The current time, in UNIX epoch time. If the block is new, this value should be used to set
      * the discovery time. If null, the function should clear the discovery time.
      */
-    setBlockDiscoveryTime?: (blockNumber: number, currentTime: number | null) => Promise<void> | undefined;
+    setBlockDiscoveryTime?: (blockNumber: number, currentTime: number | null) => Promise<void>;
 };
 
 export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
@@ -329,6 +329,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
      * new, `null` is returned.
      */
     private async _getBlockDiscoveryTime(blockNumber: number): Promise<number | null> {
+        if (this.#fallbackOptions.getBlockDiscoveryTime) {
+            return this.#fallbackOptions.getBlockDiscoveryTime(blockNumber);
+        }
+
         const latest = this.#latestBlockDiscovery;
         if (latest.blockNumber === null) {
             return null;
@@ -350,6 +354,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
      * the discovery time. If null, the function should clear the discovery time.
      */
     private async _setBlockDiscoveryTime(blockNumber: number, currentTime: number | null): Promise<void> {
+        if (this.#fallbackOptions.setBlockDiscoveryTime) {
+            return this.#fallbackOptions.setBlockDiscoveryTime(blockNumber, currentTime);
+        }
+
         const latest = this.#latestBlockDiscovery;
         if (currentTime === null) {
             this.#latestBlockDiscovery = {
