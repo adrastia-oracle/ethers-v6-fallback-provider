@@ -60,8 +60,8 @@ export type FallbackProviderOptions = {
     /**
      * Interval at which the provider will check the liveliness of the chain and of providers.
      *
-     * Denominated in seconds. If set to 0, the liveliness check will be disabled. If not set, liveliness check will be
-     * disabled.
+     * Denominated in milliseconds. If set to 0, the liveliness check will be disabled. If not set, liveliness check
+     * will be disabled.
      */
     livelinessPollingInterval?: number;
 
