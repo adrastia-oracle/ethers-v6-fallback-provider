@@ -180,6 +180,24 @@ describe("FallbackProvider", () => {
             expect(provider2.send).toHaveBeenCalledTimes(1);
             expect(provider3.send).toHaveBeenCalledTimes(1);
         });
+
+        it("should return an integer median, rounding down", async () => {
+            const underlyingBlockNumbers = [101, 102];
+
+            const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+            const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2]);
+
+            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(median).toEqual(101);
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+        });
     });
 
     describe("perform", () => {
