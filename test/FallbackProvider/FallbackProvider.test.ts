@@ -1,7 +1,13 @@
-import { FallbackProvider, FallbackProviderError, filterValidProviders } from "../../src/FallbackProvider";
+import {
+    FallbackProvider,
+    FallbackProviderError,
+    filterValidProviders,
+    getBlockNumbersAndMedian,
+} from "../../src/FallbackProvider";
 import FailingProvider from "./helpers/FailingProvider";
 import MockProvider from "./helpers/MockProvider";
 import MockWebsocketProvider from "./helpers/MockWebsocketProvider";
+import StallingProvider from "./helpers/StallingProvider";
 
 describe("FallbackProvider", () => {
     beforeEach(() => {
@@ -42,6 +48,137 @@ describe("FallbackProvider", () => {
             expect(providers).toHaveLength(2);
             expect(providers[0].provider).toEqual(provider1);
             expect(providers[1].provider).toEqual(provider3);
+        });
+    });
+
+    describe("getBlockNumbersAndMedian", () => {
+        it("should throw an error if no provider is provided", async () => {
+            await expect(getBlockNumbersAndMedian([])).rejects.toThrowError(
+                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE
+            );
+        });
+
+        it("should report null for stalling providers", async () => {
+            const provider1 = new MockProvider("1", 1, 10);
+            const provider2 = new StallingProvider("2", 1, 1);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2]);
+
+            expect(blockNumbers).toEqual([10, null]);
+            expect(median).toEqual(10);
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("should throw an error if all providers are stalling", async () => {
+            const provider1 = new StallingProvider("1", 1, 1);
+            const provider2 = new StallingProvider("2", 1, 1);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+
+            await expect(getBlockNumbersAndMedian([provider1, provider2])).rejects.toThrowError(
+                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE
+            );
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("should return the block numbers and the median with some stalling providers", async () => {
+            const underlyingBlockNumbers = [100, null, null];
+
+            const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+            const provider2 = new StallingProvider("1", 1, 1);
+            const provider3 = new StallingProvider("1", 1, 1);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+            jest.spyOn(provider3, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2, provider3]);
+
+            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(median).toEqual(100);
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+            expect(provider3.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("should return the block numbers and the median with some failing providers", async () => {
+            const underlyingBlockNumbers = [100, null, null];
+
+            const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+            const provider2 = new FailingProvider("1", 1, 1);
+            const provider3 = new FailingProvider("1", 1, 1);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+            jest.spyOn(provider3, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2, provider3]);
+
+            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(median).toEqual(100);
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+            expect(provider3.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("should compute the median with an even number of block numbers", async () => {
+            const underlyingBlockNumbers = [100, 200, 300, 400];
+
+            const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+            const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+            const provider3 = new MockProvider("1", 1, underlyingBlockNumbers[2] as number);
+            const provider4 = new MockProvider("1", 1, underlyingBlockNumbers[3] as number);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+            jest.spyOn(provider3, "send");
+            jest.spyOn(provider4, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([
+                provider1,
+                provider2,
+                provider3,
+                provider4,
+            ]);
+
+            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(median).toEqual(250);
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+            expect(provider3.send).toHaveBeenCalledTimes(1);
+            expect(provider4.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("should compute the median with an odd number of block numbers", async () => {
+            const underlyingBlockNumbers = [100, 200, 300];
+
+            const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+            const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+            const provider3 = new MockProvider("1", 1, underlyingBlockNumbers[2] as number);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+            jest.spyOn(provider3, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2, provider3]);
+
+            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(median).toEqual(200);
+
+            expect(provider1.send).toHaveBeenCalledTimes(1);
+            expect(provider2.send).toHaveBeenCalledTimes(1);
+            expect(provider3.send).toHaveBeenCalledTimes(1);
         });
     });
 

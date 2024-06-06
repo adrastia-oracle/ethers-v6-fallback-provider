@@ -11,6 +11,11 @@ export default class FailingProvider extends MockProvider {
         this.failureCount++;
         if (this.failureCount > this._numberOfFailures) {
             this.failureCount = 0;
+
+            if (method === "eth_blockNumber") {
+                return this._blockNumber;
+            }
+
             return this._id;
         }
 
@@ -18,10 +23,6 @@ export default class FailingProvider extends MockProvider {
     }
 
     async send(method: string, params: { [name: string]: any }): Promise<any> {
-        if (method === "eth_blockNumber") {
-            return this._blockNumber;
-        }
-
         return await this.sendNonBlockNumberCall(method, params);
     }
 }
