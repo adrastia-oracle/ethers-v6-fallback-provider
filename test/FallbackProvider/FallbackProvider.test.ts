@@ -35,7 +35,7 @@ describe("FallbackProvider", () => {
             const provider2 = new MockProvider("2", 0);
 
             await expect(filterValidProviders([provider1, provider2])).rejects.toThrowError(
-                FallbackProviderError.CANNOT_DETECT_NETWORKS
+                FallbackProviderError.CANNOT_DETECT_NETWORKS,
             );
         });
 
@@ -44,7 +44,7 @@ describe("FallbackProvider", () => {
             const provider2 = new MockProvider("2", 2);
 
             await expect(filterValidProviders([provider1, provider2])).rejects.toThrowError(
-                FallbackProviderError.INCONSISTENT_NETWORKS
+                FallbackProviderError.INCONSISTENT_NETWORKS,
             );
         });
 
@@ -65,7 +65,7 @@ describe("FallbackProvider", () => {
     describe("getBlockNumbersAndMedian", () => {
         it("should throw an error if no provider is provided", async () => {
             await expect(getBlockNumbersAndMedian([])).rejects.toThrowError(
-                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE
+                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE,
             );
         });
 
@@ -93,7 +93,7 @@ describe("FallbackProvider", () => {
             jest.spyOn(provider2, "send");
 
             await expect(getBlockNumbersAndMedian([provider1, provider2])).rejects.toThrowError(
-                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE
+                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE,
             );
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
@@ -463,7 +463,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    LIVELINESS_FALLBACK_OPTIONS
+                    LIVELINESS_FALLBACK_OPTIONS,
                 );
 
                 // Wait some time for the liveliness check to run
@@ -491,7 +491,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    LIVELINESS_FALLBACK_OPTIONS
+                    LIVELINESS_FALLBACK_OPTIONS,
                 );
 
                 // Wait some time for the liveliness check to run
@@ -524,7 +524,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    LIVELINESS_FALLBACK_OPTIONS
+                    LIVELINESS_FALLBACK_OPTIONS,
                 );
 
                 // Wait some time for the liveliness check to run
@@ -559,7 +559,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    LIVELINESS_FALLBACK_OPTIONS
+                    LIVELINESS_FALLBACK_OPTIONS,
                 );
 
                 // Wait some time for the liveliness check to run
@@ -593,7 +593,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    LIVELINESS_FALLBACK_OPTIONS
+                    LIVELINESS_FALLBACK_OPTIONS,
                 );
 
                 // Wait some time for the liveliness check to run
@@ -645,7 +645,7 @@ describe("FallbackProvider", () => {
                         ...LIVELINESS_FALLBACK_OPTIONS,
                         getBlockDiscoveryTime: getBlockDiscoveryTime,
                         setBlockDiscoveryTime: setBlockDiscoveryTime,
-                    }
+                    },
                 );
 
                 // Wait some time for the liveliness check to run
@@ -683,7 +683,7 @@ describe("FallbackProvider", () => {
                         ...LIVELINESS_FALLBACK_OPTIONS,
                         getBlockDiscoveryTime: getBlockDiscoveryTime,
                         setBlockDiscoveryTime: setBlockDiscoveryTime,
-                    }
+                    },
                 );
 
                 // Wait some time for the liveliness check to run
@@ -725,7 +725,7 @@ describe("FallbackProvider", () => {
                         ...LIVELINESS_FALLBACK_OPTIONS,
                         getBlockDiscoveryTime: getBlockDiscoveryTime,
                         setBlockDiscoveryTime: setBlockDiscoveryTime,
-                    }
+                    },
                 );
 
                 // Wait some time for the liveliness check to run
@@ -775,7 +775,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    { ...LIVELINESS_FALLBACK_OPTIONS, haltDetectionTime: haltDetectionTime }
+                    { ...LIVELINESS_FALLBACK_OPTIONS, haltDetectionTime: haltDetectionTime },
                 );
 
                 // Wait some time for the the chain to be detected as halted
@@ -783,7 +783,7 @@ describe("FallbackProvider", () => {
                     LIVELINESS_PROVIDER_TIMEOUT +
                         LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! +
                         haltDetectionTime * 1000 +
-                        1000
+                        1000,
                 );
 
                 await expect(provider.send("send", {})).rejects.toThrowError(FallbackProviderError.HALTED);
@@ -806,7 +806,7 @@ describe("FallbackProvider", () => {
                     undefined,
                     undefined,
                     undefined,
-                    { ...LIVELINESS_FALLBACK_OPTIONS, haltDetectionTime: haltDetectionTime }
+                    { ...LIVELINESS_FALLBACK_OPTIONS, haltDetectionTime: haltDetectionTime },
                 );
 
                 // Wait some time for the the chain to be detected as halted
@@ -814,7 +814,7 @@ describe("FallbackProvider", () => {
                     LIVELINESS_PROVIDER_TIMEOUT +
                         LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! +
                         haltDetectionTime * 1000 +
-                        1000
+                        1000,
                 );
 
                 await expect(provider.send("send", {})).rejects.toThrowError(FallbackProviderError.HALTED);
@@ -840,6 +840,102 @@ describe("FallbackProvider", () => {
                 expect(res).toEqual("1");
                 expect(provider.activeProvidersCount()).toEqual(2);
                 expect(provider.isHalted()).toEqual(false);
+            });
+        });
+
+        describe("Broadcast to all providers", () => {
+            it("Should broadcast to all providers", async () => {
+                const provider1 = new MockProvider("1");
+                const provider2 = new MockProvider("2");
+                provider = new FallbackProvider([provider1, provider2], undefined, undefined, undefined, {
+                    broadcastToAll: true,
+                });
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("1");
+            });
+
+            it("Should handle a failing provider", async () => {
+                const provider1 = new FailingProvider("1");
+                const provider2 = new MockProvider("2");
+                provider = new FallbackProvider([provider1, provider2], undefined, undefined, undefined, {
+                    broadcastToAll: true,
+                });
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("2");
+            });
+
+            it("Should not be blocked by a stalling provider when one works", async () => {
+                const provider1 = new StallingProvider("1");
+                const provider2 = new MockProvider("2");
+                provider = new FallbackProvider([provider1, provider2], undefined, undefined, undefined, {
+                    broadcastToAll: true,
+                });
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("2");
+            });
+
+            it("Should throw an error if all providers are failing", async () => {
+                const provider1 = new FailingProvider("1");
+                const provider2 = new FailingProvider("2");
+                provider = new FallbackProvider([provider1, provider2], undefined, undefined, undefined, {
+                    broadcastToAll: true,
+                });
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                await expect(provider.send("eth_sendRawTransaction", {})).rejects.toThrow("Failing provider used: 1");
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            });
+
+            it("Should retry all failing providers", async () => {
+                const retries = 2;
+
+                const provider1 = new FailingProvider("1");
+                const provider2 = new FailingProvider("2");
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, retries: retries },
+                        { provider: provider2, retries: retries },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        broadcastToAll: true,
+                    },
+                );
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                await expect(provider.send("eth_sendRawTransaction", {})).rejects.toThrow("Failing provider used: 1");
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(retries + 1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(retries + 1);
             });
         });
     });

@@ -87,12 +87,19 @@ export type FallbackProviderOptions = {
      * the discovery time. If null, the function should clear the discovery time.
      */
     setBlockDiscoveryTime?: (blockNumber: number, currentTime: number | null) => Promise<void>;
+
+    /**
+     * If true, the provider will broadcast signed transactions to all of the active providers at once. If false, the
+     * provider will broadcast the transaction in the same fashion as all other calls. Default: false.
+     */
+    broadcastToAll?: boolean;
 };
 
 export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
     allowableBlockLag: 2,
     haltDetectionTime: 5 * 60, // 5 minutes
     livelinessPollingInterval: 0, // Disabled
+    broadcastToAll: false,
 };
 
 export const filterValidProviders = async (providers: ProviderConfig[]) => {
@@ -141,8 +148,8 @@ export async function getBlockNumberWithTimeout(provider: JsonRpcApiProvider, ti
 export const getBlockNumbersAndMedian = async (providers: ProviderConfig[]) => {
     const blockNumbers = await Promise.all(
         providers.map(({ provider, timeout }) =>
-            getBlockNumberWithTimeout(provider, timeout ?? DEFAULT_TIMEOUT).catch(() => null)
-        )
+            getBlockNumberWithTimeout(provider, timeout ?? DEFAULT_TIMEOUT).catch(() => null),
+        ),
     );
 
     // Filter out the undefined block numbers.
@@ -191,7 +198,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
         network?: Networkish,
         options?: JsonRpcApiProviderOptions,
         loggingOptions?: LoggingOptions,
-        fallbackOptions?: FallbackProviderOptions
+        fallbackOptions?: FallbackProviderOptions,
     ) {
         super(network, options);
 
@@ -237,7 +244,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
         method: string,
         params: { [name: string]: any },
         retries = 0,
-        useFallback = true
+        useFallback = true,
     ): Promise<any> {
         const { provider, retries: maxRetries, timeout, retryDelay } = providers[providerIndex];
 
@@ -252,7 +259,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
                     if (providerIndex >= providers.length - 1) {
                         throw new Error(
-                            `[FallbackProvider] Provider n°${providerIndex} websocket closed with no fallback available`
+                            `[FallbackProvider] Provider n°${providerIndex} websocket closed with no fallback available`,
                         );
                     }
 
@@ -266,7 +273,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                         this.#logging?.warn?.(
                             `[FallbackProvider] Provider n°${providerIndex} websocket not ready. Fallbacking to provider n°${
                                 providerIndex + 1
-                            }`
+                            }`,
                         );
 
                         try {
@@ -292,7 +299,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 this.#logging?.debug?.(
                     `[FallbackProvider] Call to \`${method}\` failing with provider n°${providerIndex}, retrying in ${delay}ms (${
                         retries + 1
-                    }/${maxRetries}) \n\n${e}`
+                    }/${maxRetries}) \n\n${e}`,
                 );
                 await wait(delay);
                 return this.sendWithProvider(providers, providerIndex, method, params, retries + 1, useFallback);
@@ -302,7 +309,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
             this.#logging?.warn?.(
                 `[FallbackProvider] Call to \`${method}\` failing with provider n°${providerIndex}, retrying with provider n°${
                     providerIndex + 1
-                }\n\n${e}`
+                }\n\n${e}`,
             );
             return this.sendWithProvider(providers, providerIndex + 1, method, params);
         }
@@ -318,6 +325,25 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
         if (method === "eth_chainId") {
             return (await filterValidProviders(this.#activeProviders)).network.chainId;
+        } else if (method === "eth_sendRawTransaction") {
+            // Check if we should broadcast to all providers.
+            const broadcastToAll = this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
+            if (broadcastToAll) {
+                // Broadcast to all providers.
+                const promises = this.#activeProviders.map((provider) =>
+                    this.sendWithProvider([provider], 0, method, params),
+                );
+
+                try {
+                    // Wait for the first result.
+                    const result = await Promise.any(promises);
+
+                    return result;
+                } catch (error: any) {
+                    // If all promises throw errors, it should throw the first error.
+                    throw error.errors[0];
+                }
+            }
         }
 
         return this.sendWithProvider(this.#activeProviders, 0, method, params);
