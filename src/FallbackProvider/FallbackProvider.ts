@@ -304,12 +304,12 @@ export class FallbackProvider extends JsonRpcApiProvider {
             if (retries < (maxRetries ?? DEFAULT_RETRIES)) {
                 // Wait for a random time before retrying.
                 const delay = Math.ceil(Math.random() * (retryDelay ?? RETRY_DELAY));
-                this.#logging?.debug?.(
-                    `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying in ${delay}ms (${
-                        retries + 1
-                    }/${maxRetries}) \n\n${e}`,
-                );
                 if (delay > 0) {
+                    this.#logging?.debug?.(
+                        `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying in ${delay}ms (${
+                            retries + 1
+                        }/${maxRetries}) \n\n${e}`,
+                    );
                     await wait(delay);
                 }
 
