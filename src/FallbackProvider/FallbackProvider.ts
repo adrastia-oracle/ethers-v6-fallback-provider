@@ -29,6 +29,7 @@ export interface ProviderConfig {
     retries?: number;
     timeout?: number;
     retryDelay?: number;
+    id?: string;
 }
 
 export interface LoggingOptions {
@@ -208,6 +209,13 @@ export class FallbackProvider extends JsonRpcApiProvider {
         this.#logging = loggingOptions ?? {};
         this.#fallbackOptions = fallbackOptions ?? {};
 
+        // Add IDs to the providers if they don't have them.
+        this.#providers.forEach((provider, i) => {
+            if (!provider.id) {
+                provider.id = `${i}`;
+            }
+        });
+
         this._start();
     }
 
@@ -246,7 +254,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
         retries = 0,
         useFallback = true,
     ): Promise<any> {
-        const { provider, retries: maxRetries, timeout, retryDelay } = providers[providerIndex];
+        const { provider, retries: maxRetries, timeout, retryDelay, id } = providers[providerIndex];
 
         try {
             if (isWebSocketProvider(provider)) {
@@ -255,11 +263,11 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
                 if (readyState >= 2) {
                     // Closing or closed. Immediately fallback if possible.
-                    this.#logging?.warn?.(`[FallbackProvider] Provider n°${providerIndex} websocket closed`);
+                    this.#logging?.warn?.(`[FallbackProvider] Provider ${id} websocket closed`);
 
                     if (providerIndex >= providers.length - 1) {
                         throw new Error(
-                            `[FallbackProvider] Provider n°${providerIndex} websocket closed with no fallback available`,
+                            `[FallbackProvider] Provider ${id} websocket closed with no fallback available`,
                         );
                     }
 
@@ -271,9 +279,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                     // Websocket still connecting. Fallback if possible.
                     if (providerIndex < providers.length - 1) {
                         this.#logging?.warn?.(
-                            `[FallbackProvider] Provider n°${providerIndex} websocket not ready. Fallbacking to provider n°${
-                                providerIndex + 1
-                            }`,
+                            `[FallbackProvider] Provider ${id} websocket not ready. Fallbacking to provider ${id}`,
                         );
 
                         try {
@@ -297,7 +303,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 // Wait for a random time before retrying.
                 const delay = Math.ceil(Math.random() * (retryDelay ?? RETRY_DELAY));
                 this.#logging?.debug?.(
-                    `[FallbackProvider] Call to \`${method}\` failing with provider n°${providerIndex}, retrying in ${delay}ms (${
+                    `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying in ${delay}ms (${
                         retries + 1
                     }/${maxRetries}) \n\n${e}`,
                 );
@@ -307,8 +313,8 @@ export class FallbackProvider extends JsonRpcApiProvider {
             if (providerIndex >= providers.length - 1 || !useFallback) throw e;
 
             this.#logging?.warn?.(
-                `[FallbackProvider] Call to \`${method}\` failing with provider n°${providerIndex}, retrying with provider n°${
-                    providerIndex + 1
+                `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying with provider ${
+                    id
                 }\n\n${e}`,
             );
             return this.sendWithProvider(providers, providerIndex + 1, method, params);
