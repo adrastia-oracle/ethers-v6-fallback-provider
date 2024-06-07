@@ -256,6 +256,8 @@ export class FallbackProvider extends JsonRpcApiProvider {
     ): Promise<any> {
         const { provider, retries: maxRetries, timeout, retryDelay, id } = providers[providerIndex];
 
+        const nextProviderId = providerIndex < providers.length - 1 ? providers[providerIndex + 1].id : null;
+
         try {
             if (isWebSocketProvider(provider)) {
                 // Provider is a WebSocketProvider. Let's perform some additional checks.
@@ -279,7 +281,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                     // Websocket still connecting. Fallback if possible.
                     if (providerIndex < providers.length - 1) {
                         this.#logging?.warn?.(
-                            `[FallbackProvider] Provider ${id} websocket not ready. Fallbacking to provider ${id}`,
+                            `[FallbackProvider] Provider ${id} websocket not ready. Fallbacking to provider ${nextProviderId}`,
                         );
 
                         try {
@@ -314,7 +316,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
             this.#logging?.warn?.(
                 `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying with provider ${
-                    id
+                    nextProviderId
                 }\n\n${e}`,
             );
             return this.sendWithProvider(providers, providerIndex + 1, method, params);
