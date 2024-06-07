@@ -334,16 +334,19 @@ export class FallbackProvider extends JsonRpcApiProvider {
             throw new Error(FallbackProviderError.HALTED);
         }
 
+        const providersToUse = this.#activeProviders;
+        if (providersToUse.length === 0) {
+            throw new Error(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
+        }
+
         if (method === "eth_chainId") {
-            return (await filterValidProviders(this.#activeProviders)).network.chainId;
+            return (await filterValidProviders(providersToUse)).network.chainId;
         } else if (method === "eth_sendRawTransaction") {
             // Check if we should broadcast to all providers.
             const broadcastToAll = this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
             if (broadcastToAll) {
                 // Broadcast to all providers.
-                const promises = this.#activeProviders.map((provider) =>
-                    this.sendWithProvider([provider], 0, method, params),
-                );
+                const promises = providersToUse.map((provider) => this.sendWithProvider([provider], 0, method, params));
 
                 try {
                     // Wait for the first result.
@@ -357,7 +360,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
             }
         }
 
-        return this.sendWithProvider(this.#activeProviders, 0, method, params);
+        return this.sendWithProvider(providersToUse, 0, method, params);
     }
 
     async _send(payload: JsonRpcPayload | Array<JsonRpcPayload>): Promise<Array<JsonRpcResult | JsonRpcError>> {
