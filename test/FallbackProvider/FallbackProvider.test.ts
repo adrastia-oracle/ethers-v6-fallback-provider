@@ -760,6 +760,87 @@ describe("FallbackProvider", () => {
                 expect(provider.activeProvidersCount()).toEqual(2);
                 expect(provider.isHalted()).toEqual(false);
             });
+
+            it("Throws a halted error if all providers are halted, with the default halt detection mechanism", async () => {
+                const blockNum = 100;
+                const haltDetectionTime = 3; // 3 seconds
+
+                const provider1 = new MockProvider("1", 1, blockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    { ...LIVELINESS_FALLBACK_OPTIONS, haltDetectionTime: haltDetectionTime }
+                );
+
+                // Wait some time for the the chain to be detected as halted
+                await wait(
+                    LIVELINESS_PROVIDER_TIMEOUT +
+                        LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! +
+                        haltDetectionTime * 1000 +
+                        1000
+                );
+
+                await expect(provider.send("send", {})).rejects.toThrowError(FallbackProviderError.HALTED);
+
+                expect(provider.activeProvidersCount()).toEqual(2);
+                expect(provider.isHalted()).toEqual(true);
+            });
+
+            it("Recovers from a halted state if a provider recovers, with the default halt detection mechanism", async () => {
+                const blockNum = 100;
+                const haltDetectionTime = 3; // 3 seconds
+
+                const provider1 = new MockProvider("1", 1, blockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    { ...LIVELINESS_FALLBACK_OPTIONS, haltDetectionTime: haltDetectionTime }
+                );
+
+                // Wait some time for the the chain to be detected as halted
+                await wait(
+                    LIVELINESS_PROVIDER_TIMEOUT +
+                        LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! +
+                        haltDetectionTime * 1000 +
+                        1000
+                );
+
+                await expect(provider.send("send", {})).rejects.toThrowError(FallbackProviderError.HALTED);
+
+                expect(provider.activeProvidersCount()).toEqual(2);
+                expect(provider.isHalted()).toEqual(true);
+
+                const newBlockNum = blockNum + 1;
+
+                provider1.blockNumber = newBlockNum;
+                provider2.blockNumber = newBlockNum;
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res).toEqual("1");
+                expect(provider.activeProvidersCount()).toEqual(2);
+                expect(provider.isHalted()).toEqual(false);
+            });
         });
     });
 });
