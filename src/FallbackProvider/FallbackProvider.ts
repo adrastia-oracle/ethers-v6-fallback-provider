@@ -309,7 +309,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
                         retries + 1
                     }/${maxRetries}) \n\n${e}`,
                 );
-                await wait(delay);
+                if (delay > 0) {
+                    await wait(delay);
+                }
+
                 return this.sendWithProvider(providers, providerIndex, method, params, retries + 1, useFallback);
             }
             if (providerIndex >= providers.length - 1 || !useFallback) throw e;
