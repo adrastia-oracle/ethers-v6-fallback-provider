@@ -204,6 +204,14 @@ export class FallbackProvider extends JsonRpcApiProvider {
         this._start();
     }
 
+    public activeProvidersCount(): number {
+        return this.#activeProviders.length;
+    }
+
+    public isHalted(): boolean {
+        return this.#halted;
+    }
+
     private _validateFallbackOptions(options: FallbackProviderOptions | undefined) {
         if (!options) {
             // No options provided. Using the default options.

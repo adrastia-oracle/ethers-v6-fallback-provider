@@ -1,13 +1,24 @@
 import {
+    DEFAULT_TIMEOUT,
     FallbackProvider,
     FallbackProviderError,
+    FallbackProviderOptions,
     filterValidProviders,
     getBlockNumbersAndMedian,
 } from "../../src/FallbackProvider";
+import { wait } from "../../src/utils/promises";
 import FailingProvider from "./helpers/FailingProvider";
 import MockProvider from "./helpers/MockProvider";
 import MockWebsocketProvider from "./helpers/MockWebsocketProvider";
+import RecoveringProvider from "./helpers/RecoveringProvider";
 import StallingProvider from "./helpers/StallingProvider";
+
+const LIVELINESS_FALLBACK_OPTIONS: FallbackProviderOptions = {
+    allowableBlockLag: 2,
+    haltDetectionTime: 5 * 60, // 5 minutes
+    livelinessPollingInterval: 10, // 10ms
+};
+const LIVELINESS_PROVIDER_TIMEOUT = 100;
 
 describe("FallbackProvider", () => {
     beforeEach(() => {
@@ -437,6 +448,317 @@ describe("FallbackProvider", () => {
 
                 expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
                 expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            });
+        });
+
+        describe("Liveliness", () => {
+            it("Should filter out stalling providers", async () => {
+                const provider1 = new StallingProvider("1", 1, 1);
+                const provider2 = new MockProvider("2", 1, 1);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    LIVELINESS_FALLBACK_OPTIONS
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("2");
+                expect(provider.activeProvidersCount()).toEqual(1);
+            });
+
+            it("Should filter out failing providers", async () => {
+                const provider1 = new FailingProvider("1", 10000, 1);
+                const provider2 = new MockProvider("2", 1, 1);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    LIVELINESS_FALLBACK_OPTIONS
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("2");
+                expect(provider.activeProvidersCount()).toEqual(1);
+            });
+
+            it("Should filter out lagging providers", async () => {
+                const blockNum = 100;
+                const laggingBlockNum = blockNum - LIVELINESS_FALLBACK_OPTIONS.allowableBlockLag! - 1;
+
+                const provider1 = new MockProvider("1", 1, laggingBlockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                const provider3 = new MockProvider("3", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider3, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    LIVELINESS_FALLBACK_OPTIONS
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res).toEqual("2");
+                expect(provider.activeProvidersCount()).toEqual(2);
+            });
+
+            it("Should allow the maximum amount of lag", async () => {
+                const blockNum = 100;
+                const laggingBlockNum = blockNum - LIVELINESS_FALLBACK_OPTIONS.allowableBlockLag!;
+
+                const provider1 = new MockProvider("1", 1, laggingBlockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                const provider3 = new MockProvider("3", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider3, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    LIVELINESS_FALLBACK_OPTIONS
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res).toEqual("1");
+                expect(provider.activeProvidersCount()).toEqual(3);
+            });
+
+            it("Should filter out a failing provider then add it back when it recovers", async () => {
+                const blockNum = 100;
+
+                const provider1 = new RecoveringProvider("1", 1, blockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                const provider3 = new MockProvider("3", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider3, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    LIVELINESS_FALLBACK_OPTIONS
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res).toEqual("2");
+                expect(provider.activeProvidersCount()).toEqual(2);
+
+                provider1.failing = false;
+
+                // Wait some time for the liveliness check to run again
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                const res2 = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res2).toEqual("1");
+                expect(provider.activeProvidersCount()).toEqual(3);
+            });
+
+            it("Should call our custom block discovery time handlers", async () => {
+                const blockNum = 100;
+
+                const getBlockDiscoveryTime = jest.fn(async (blockNumber) => null);
+                const setBlockDiscoveryTime = jest.fn(async (blockNumber, blockDiscoveryTime) => {});
+
+                const provider1 = new MockProvider("1", 1, blockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        ...LIVELINESS_FALLBACK_OPTIONS,
+                        getBlockDiscoveryTime: getBlockDiscoveryTime,
+                        setBlockDiscoveryTime: setBlockDiscoveryTime,
+                    }
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                expect(getBlockDiscoveryTime).toHaveBeenCalledWith(blockNum);
+                expect(setBlockDiscoveryTime).toHaveBeenCalledWith(blockNum, expect.any(Number));
+            });
+
+            it("Throws a halted error if all providers are halted", async () => {
+                const blockNum = 100;
+                const unixEpochTime = Date.now() / 1000;
+                const discoveryTime = unixEpochTime - LIVELINESS_FALLBACK_OPTIONS.haltDetectionTime! - 1;
+
+                const getBlockDiscoveryTime = jest.fn(async (blockNumber) => {
+                    if (blockNumber === blockNum) {
+                        return discoveryTime;
+                    } else {
+                        return null;
+                    }
+                });
+                const setBlockDiscoveryTime = jest.fn(async (blockNumber, blockDiscoveryTime) => {});
+
+                const provider1 = new MockProvider("1", 1, blockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        ...LIVELINESS_FALLBACK_OPTIONS,
+                        getBlockDiscoveryTime: getBlockDiscoveryTime,
+                        setBlockDiscoveryTime: setBlockDiscoveryTime,
+                    }
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                await expect(provider.send("send", {})).rejects.toThrowError(FallbackProviderError.HALTED);
+
+                expect(getBlockDiscoveryTime).toHaveBeenCalledWith(blockNum);
+                expect(setBlockDiscoveryTime).not.toHaveBeenCalled();
+                expect(provider.activeProvidersCount()).toEqual(2);
+                expect(provider.isHalted()).toEqual(true);
+            });
+
+            it("Recovers from a halted state if a provider recovers", async () => {
+                const blockNum = 100;
+                const unixEpochTime = Date.now() / 1000;
+                const discoveryTime = unixEpochTime - LIVELINESS_FALLBACK_OPTIONS.haltDetectionTime! - 1;
+
+                const getBlockDiscoveryTime = jest.fn(async (blockNumber) => {
+                    if (blockNumber === blockNum) {
+                        return discoveryTime;
+                    } else {
+                        return null;
+                    }
+                });
+                const setBlockDiscoveryTime = jest.fn(async (blockNumber, blockDiscoveryTime) => {});
+
+                const provider1 = new MockProvider("1", 1, blockNum);
+                const provider2 = new MockProvider("2", 1, blockNum);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                        { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        ...LIVELINESS_FALLBACK_OPTIONS,
+                        getBlockDiscoveryTime: getBlockDiscoveryTime,
+                        setBlockDiscoveryTime: setBlockDiscoveryTime,
+                    }
+                );
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                await expect(provider.send("send", {})).rejects.toThrowError(FallbackProviderError.HALTED);
+
+                expect(getBlockDiscoveryTime).toHaveBeenCalledWith(blockNum);
+                expect(setBlockDiscoveryTime).not.toHaveBeenCalled();
+                expect(provider.activeProvidersCount()).toEqual(2);
+                expect(provider.isHalted()).toEqual(true);
+
+                const newBlockNum = blockNum + 1;
+
+                provider1.blockNumber = newBlockNum;
+                provider2.blockNumber = newBlockNum;
+
+                // Wait some time for the liveliness check to run
+                await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(getBlockDiscoveryTime).toHaveBeenCalledWith(newBlockNum);
+                expect(setBlockDiscoveryTime).toHaveBeenCalledWith(newBlockNum, expect.any(Number));
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res).toEqual("1");
+                expect(provider.activeProvidersCount()).toEqual(2);
+                expect(provider.isHalted()).toEqual(false);
             });
         });
     });
