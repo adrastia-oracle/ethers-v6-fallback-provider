@@ -1,7 +1,9 @@
 import { JsonRpcApiProvider, JsonRpcError, JsonRpcPayload, JsonRpcResult, Network } from "ethers";
 
-export default class MockProvider extends JsonRpcApiProvider {
-    constructor(protected _id: string, protected _networkId = 1, public blockNumber = 1) {
+export default class RecoveringProvider extends JsonRpcApiProvider {
+    failing = true;
+
+    constructor(protected _id: string, protected _networkId = 1, protected _blockNumber = 1) {
         super(_networkId);
     }
 
@@ -21,8 +23,12 @@ export default class MockProvider extends JsonRpcApiProvider {
     async send(method: string, params: { [name: string]: any }): Promise<any> {
         this._start();
 
+        if (this.failing) {
+            throw new Error("Failing provider used: " + this._id);
+        }
+
         if (method === "eth_blockNumber") {
-            return this.blockNumber;
+            return this._blockNumber;
         }
 
         return await this.sendNonBlockNumberCall(method, params);

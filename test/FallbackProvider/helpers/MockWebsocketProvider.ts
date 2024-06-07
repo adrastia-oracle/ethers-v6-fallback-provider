@@ -5,7 +5,7 @@ import { default as MockWebsocket } from "./MockWebsocket";
 export default class MockWebsocketProvider extends MockProvider {
     protected _websocket = new MockWebsocket();
 
-    constructor(_id: string, _networkId = 1) {
+    constructor(_id: string, _networkId = 1, protected _blockNumber = 1) {
         super(_id, _networkId);
     }
 
@@ -17,7 +17,7 @@ export default class MockWebsocketProvider extends MockProvider {
         return this._websocket;
     }
 
-    async send() {
+    async sendNonBlockNumberCall(method: string, params: { [name: string]: any }): Promise<any> {
         const state = this._websocket.readyState;
 
         if (state == 0) {
@@ -41,5 +41,15 @@ export default class MockWebsocketProvider extends MockProvider {
         } else {
             throw new Error("Websocket is not ready");
         }
+    }
+
+    async send(method: string, params: { [name: string]: any }): Promise<any> {
+        this._start();
+
+        if (method === "eth_blockNumber") {
+            return this._blockNumber;
+        }
+
+        return await this.sendNonBlockNumberCall(method, params);
     }
 }
