@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.2 (2024-JUN-13)
+
+-   Fix provider ID logging bug
+-   Add check for active provider availability with a custom error
+
 ## v1.2.0 (2024-JUN-06)
 
 -   Adds a mechanism to broadcast transactions to all providers if desired
