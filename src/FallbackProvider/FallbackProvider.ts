@@ -19,6 +19,7 @@ export enum FallbackProviderError {
     ALL_PROVIDERS_UNAVAILABLE = "All providers are unavailable",
     HALTED = "Chain has halted",
     INVALID_FALLBACK_OPTIONS = "Invalid fallback options",
+    BLOCK_NUMBER_STORAGE_CONFIG_ERROR = "Both getStoredBlockNumber and setStoredBlockNumber must be provided or neither",
 }
 export const DEFAULT_RETRIES = 0;
 export const DEFAULT_TIMEOUT = 3_000;
@@ -30,6 +31,22 @@ export interface ProviderConfig {
     timeout?: number;
     retryDelay?: number;
     id?: string;
+
+    /**
+     * Gets the stored block number when conducting a liveliness check.
+     *
+     * This is useful if you have many instances of the same provider and you want to share the block number between.
+     *
+     * @returns The stored block number, or null if the block number is not stored or if it's expired.
+     */
+    getStoredBlockNumber?: () => Promise<number | null>;
+
+    /**
+     * Sets the stored block number when conducting a liveliness check.
+     *
+     * @param blockNumber The block number to store.
+     */
+    setStoredBlockNumber?: (blockNumber: number) => Promise<void>;
 }
 
 export interface LoggingOptions {
@@ -146,15 +163,42 @@ export async function getBlockNumberWithTimeout(provider: JsonRpcApiProvider, ti
     });
 }
 
-export const getBlockNumbersAndMedian = async (providers: ProviderConfig[]) => {
+export const getBlockNumbersAndMedian = async (providers: ProviderConfig[], logging?: LoggingOptions) => {
     const blockNumbers = await Promise.all(
-        providers.map(({ provider, timeout }) =>
-            getBlockNumberWithTimeout(provider, timeout ?? DEFAULT_TIMEOUT).catch(() => null),
-        ),
+        providers.map(({ provider, timeout, getStoredBlockNumber }) => {
+            const getProviderPromise = () =>
+                getBlockNumberWithTimeout(provider, timeout ?? DEFAULT_TIMEOUT)
+                    .then((blockNumber) => {
+                        return { blockNumber: blockNumber, fromCache: false };
+                    })
+                    .catch(() => null);
+
+            if (getStoredBlockNumber) {
+                return getStoredBlockNumber()
+                    .then((blockNumber) => {
+                        if (blockNumber === null) {
+                            return getProviderPromise();
+                        }
+
+                        return { blockNumber, fromCache: true };
+                    })
+                    .catch((e) => {
+                        logging?.warn?.(`[FallbackProvider] Error getting stored block number: ${e.message}`, {
+                            error: e,
+                        });
+
+                        return getProviderPromise();
+                    });
+            }
+
+            return getProviderPromise();
+        }),
     );
 
     // Filter out the undefined block numbers.
-    const filteredBlockNumbers = blockNumbers.filter((blockNumber) => blockNumber !== null) as number[];
+    const filteredBlockNumbers = blockNumbers
+        .filter((blockNumberCall) => blockNumberCall != null)
+        .map((blockNumberCall) => blockNumberCall!.blockNumber) as number[];
     if (filteredBlockNumbers.length === 0) {
         throw new Error(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
     }
@@ -243,6 +287,14 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
         if (options.livelinessPollingInterval !== undefined && options.livelinessPollingInterval < 0) {
             throw new Error(FallbackProviderError.INVALID_FALLBACK_OPTIONS);
+        }
+
+        if (options.getBlockDiscoveryTime && !options.setBlockDiscoveryTime) {
+            throw new Error(FallbackProviderError.BLOCK_NUMBER_STORAGE_CONFIG_ERROR);
+        }
+
+        if (!options.getBlockDiscoveryTime && options.setBlockDiscoveryTime) {
+            throw new Error(FallbackProviderError.BLOCK_NUMBER_STORAGE_CONFIG_ERROR);
         }
     }
 
@@ -437,7 +489,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
         try {
             // Get the block numbers and the median.
-            const { blockNumbers, median } = await getBlockNumbersAndMedian(providersToCheck);
+            const { blockNumbers, median } = await getBlockNumbersAndMedian(providersToCheck, this.#logging);
 
             // Get the current time, in UNIX epoch time.
             const currentTime = Math.floor(Date.now() / 1000);
@@ -448,12 +500,22 @@ export class FallbackProvider extends JsonRpcApiProvider {
             const minBlockNumber = median - allowableBlockLag!;
 
             for (let i = 0; i < blockNumbers.length; i++) {
-                const blockNumber = blockNumbers[i];
-                if (blockNumber === null) {
+                const blockNumberCall = blockNumbers[i];
+                if (blockNumberCall === null) {
                     continue;
                 }
 
-                if (blockNumber >= minBlockNumber) {
+                if (!blockNumberCall.fromCache) {
+                    try {
+                        await providersToCheck[i].setStoredBlockNumber?.(blockNumberCall.blockNumber);
+                    } catch (e: any) {
+                        this.#logging?.warn?.(`[FallbackProvider] Error setting stored block number: ${e.message}`, {
+                            error: e,
+                        });
+                    }
+                }
+
+                if (blockNumberCall.blockNumber >= minBlockNumber) {
                     goodProviders.push(providersToCheck[i]);
                 }
             }

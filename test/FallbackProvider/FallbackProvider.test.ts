@@ -78,7 +78,13 @@ describe("FallbackProvider", () => {
 
             const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2]);
 
-            expect(blockNumbers).toEqual([10, null]);
+            expect(blockNumbers).toEqual([
+                {
+                    blockNumber: 10,
+                    fromCache: false,
+                },
+                null,
+            ]);
             expect(median).toEqual(10);
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
@@ -113,7 +119,11 @@ describe("FallbackProvider", () => {
 
             const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2, provider3]);
 
-            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(blockNumbers).toEqual(
+                underlyingBlockNumbers.map((blockNumber) =>
+                    blockNumber == null ? null : { blockNumber, fromCache: false },
+                ),
+            );
             expect(median).toEqual(100);
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
@@ -134,7 +144,11 @@ describe("FallbackProvider", () => {
 
             const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2, provider3]);
 
-            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(blockNumbers).toEqual(
+                underlyingBlockNumbers.map((blockNumber) =>
+                    blockNumber == null ? null : { blockNumber, fromCache: false },
+                ),
+            );
             expect(median).toEqual(100);
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
@@ -162,7 +176,9 @@ describe("FallbackProvider", () => {
                 provider4,
             ]);
 
-            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(blockNumbers).toEqual(
+                underlyingBlockNumbers.map((blockNumber) => ({ blockNumber, fromCache: false })),
+            );
             expect(median).toEqual(250);
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
@@ -184,7 +200,9 @@ describe("FallbackProvider", () => {
 
             const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2, provider3]);
 
-            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(blockNumbers).toEqual(
+                underlyingBlockNumbers.map((blockNumber) => ({ blockNumber, fromCache: false })),
+            );
             expect(median).toEqual(200);
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
@@ -203,11 +221,187 @@ describe("FallbackProvider", () => {
 
             const { blockNumbers, median } = await getBlockNumbersAndMedian([provider1, provider2]);
 
-            expect(blockNumbers).toEqual(underlyingBlockNumbers);
+            expect(blockNumbers).toEqual(
+                underlyingBlockNumbers.map((blockNumber) => ({ blockNumber, fromCache: false })),
+            );
             expect(median).toEqual(101);
 
             expect(provider1.send).toHaveBeenCalledTimes(1);
             expect(provider2.send).toHaveBeenCalledTimes(1);
+        });
+
+        describe("With cache", () => {
+            it("should use the cache and not call on the providers", async () => {
+                const underlyingBlockNumbers = [100, 200, 300];
+                const cachedBlockNumbers = [98, 198, 298];
+
+                const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+                const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+                const provider3 = new MockProvider("1", 1, underlyingBlockNumbers[2] as number);
+
+                jest.spyOn(provider1, "send");
+                jest.spyOn(provider2, "send");
+                jest.spyOn(provider3, "send");
+
+                const { blockNumbers, median } = await getBlockNumbersAndMedian([
+                    {
+                        provider: provider1,
+                        getStoredBlockNumber: async () => {
+                            return cachedBlockNumbers[0];
+                        },
+                    },
+                    {
+                        provider: provider2,
+                        getStoredBlockNumber: async () => {
+                            return cachedBlockNumbers[1];
+                        },
+                    },
+                    {
+                        provider: provider3,
+                        getStoredBlockNumber: async () => {
+                            return cachedBlockNumbers[2];
+                        },
+                    },
+                ]);
+
+                expect(blockNumbers).toEqual(
+                    cachedBlockNumbers.map((blockNumber) => ({ blockNumber, fromCache: true })),
+                );
+                expect(median).toEqual(cachedBlockNumbers[1]);
+
+                expect(provider1.send).not.toHaveBeenCalled();
+                expect(provider2.send).not.toHaveBeenCalled();
+                expect(provider3.send).not.toHaveBeenCalled();
+            });
+
+            it("should call on the providers if the cache is outdated", async () => {
+                const underlyingBlockNumbers = [100, 200, 300];
+
+                const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+                const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+                const provider3 = new MockProvider("1", 1, underlyingBlockNumbers[2] as number);
+
+                jest.spyOn(provider1, "send");
+                jest.spyOn(provider2, "send");
+                jest.spyOn(provider3, "send");
+
+                const { blockNumbers, median } = await getBlockNumbersAndMedian([
+                    {
+                        provider: provider1,
+                        getStoredBlockNumber: async () => {
+                            return null;
+                        },
+                    },
+                    {
+                        provider: provider2,
+                        getStoredBlockNumber: async () => {
+                            return null;
+                        },
+                    },
+                    {
+                        provider: provider3,
+                        getStoredBlockNumber: async () => {
+                            return null;
+                        },
+                    },
+                ]);
+
+                expect(blockNumbers).toEqual(
+                    underlyingBlockNumbers.map((blockNumber) => ({ blockNumber, fromCache: false })),
+                );
+                expect(median).toEqual(200);
+
+                expect(provider1.send).toHaveBeenCalledTimes(1);
+                expect(provider2.send).toHaveBeenCalledTimes(1);
+                expect(provider3.send).toHaveBeenCalledTimes(1);
+            });
+
+            it("should call on the providers if the cache throws an error", async () => {
+                const underlyingBlockNumbers = [100, 200, 300];
+
+                const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+                const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+                const provider3 = new MockProvider("1", 1, underlyingBlockNumbers[2] as number);
+
+                jest.spyOn(provider1, "send");
+                jest.spyOn(provider2, "send");
+                jest.spyOn(provider3, "send");
+
+                const { blockNumbers, median } = await getBlockNumbersAndMedian([
+                    {
+                        provider: provider1,
+                        getStoredBlockNumber: async () => {
+                            throw new Error("Cache error");
+                        },
+                    },
+                    {
+                        provider: provider2,
+                        getStoredBlockNumber: async () => {
+                            throw new Error("Cache error");
+                        },
+                    },
+                    {
+                        provider: provider3,
+                        getStoredBlockNumber: async () => {
+                            throw new Error("Cache error");
+                        },
+                    },
+                ]);
+
+                expect(blockNumbers).toEqual(
+                    underlyingBlockNumbers.map((blockNumber) => ({ blockNumber, fromCache: false })),
+                );
+                expect(median).toEqual(200);
+
+                expect(provider1.send).toHaveBeenCalledTimes(1);
+                expect(provider2.send).toHaveBeenCalledTimes(1);
+                expect(provider3.send).toHaveBeenCalledTimes(1);
+            });
+
+            it("works with a mix of cached and uncached providers", async () => {
+                const underlyingBlockNumbers = [100, 200, 300];
+                const cachedBlockNumbers = [98, 198, 298];
+
+                const provider1 = new MockProvider("1", 1, underlyingBlockNumbers[0] as number);
+                const provider2 = new MockProvider("1", 1, underlyingBlockNumbers[1] as number);
+                const provider3 = new MockProvider("1", 1, underlyingBlockNumbers[2] as number);
+
+                jest.spyOn(provider1, "send");
+                jest.spyOn(provider2, "send");
+                jest.spyOn(provider3, "send");
+
+                const { blockNumbers, median } = await getBlockNumbersAndMedian([
+                    {
+                        provider: provider1,
+                        getStoredBlockNumber: async () => {
+                            return cachedBlockNumbers[0];
+                        },
+                    },
+                    {
+                        provider: provider2,
+                        getStoredBlockNumber: async () => {
+                            return null;
+                        },
+                    },
+                    {
+                        provider: provider3,
+                        getStoredBlockNumber: async () => {
+                            return cachedBlockNumbers[2];
+                        },
+                    },
+                ]);
+
+                expect(blockNumbers).toEqual([
+                    { blockNumber: cachedBlockNumbers[0], fromCache: true },
+                    { blockNumber: underlyingBlockNumbers[1], fromCache: false },
+                    { blockNumber: cachedBlockNumbers[2], fromCache: true },
+                ]);
+                expect(median).toEqual(200);
+
+                expect(provider1.send).not.toHaveBeenCalled();
+                expect(provider2.send).toHaveBeenCalledTimes(1);
+                expect(provider3.send).not.toHaveBeenCalled();
+            });
         });
     });
 
@@ -840,6 +1034,116 @@ describe("FallbackProvider", () => {
                 expect(res).toEqual("1");
                 expect(provider.activeProvidersCount()).toEqual(2);
                 expect(provider.isHalted()).toEqual(false);
+            });
+
+            describe("block number caching", () => {
+                it("should store the block number in the cache if it comes from the provider", async () => {
+                    const blockNumbers = [100, 101];
+
+                    const provider1Cache = {
+                        blockNumber: null,
+                    };
+
+                    const provider2Cache = {
+                        blockNumber: null,
+                    };
+
+                    const provider1GetStoredBlockNumber = jest.fn(async () => provider1Cache.blockNumber);
+                    const provider1SetStoredBlockNumber = jest.fn(async (blockNumber) => {
+                        provider1Cache.blockNumber = blockNumber;
+                    });
+
+                    const provider2GetStoredBlockNumber = jest.fn(async () => provider2Cache.blockNumber);
+                    const provider2SetStoredBlockNumber = jest.fn(async (blockNumber) => {
+                        provider2Cache.blockNumber = blockNumber;
+                    });
+
+                    const provider1 = new MockProvider("1", 1, blockNumbers[0]);
+                    const provider2 = new MockProvider("2", 1, blockNumbers[1]);
+                    provider = new FallbackProvider(
+                        [
+                            {
+                                provider: provider1,
+                                getStoredBlockNumber: provider1GetStoredBlockNumber,
+                                setStoredBlockNumber: provider1SetStoredBlockNumber,
+                            },
+                            {
+                                provider: provider2,
+                                getStoredBlockNumber: provider2GetStoredBlockNumber,
+                                setStoredBlockNumber: provider2SetStoredBlockNumber,
+                            },
+                        ],
+                        undefined,
+                        undefined,
+                        undefined,
+                        LIVELINESS_FALLBACK_OPTIONS,
+                    );
+
+                    // Wait some time for the liveliness check to run
+                    await wait(
+                        LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 1000,
+                    );
+
+                    expect(provider1GetStoredBlockNumber).toHaveBeenCalled();
+                    expect(provider2GetStoredBlockNumber).toHaveBeenCalled();
+
+                    expect(provider1SetStoredBlockNumber).toHaveBeenCalledWith(blockNumbers[0]);
+                    expect(provider2SetStoredBlockNumber).toHaveBeenCalledWith(blockNumbers[1]);
+                });
+
+                it("should not store the block number in the cache if it comes from the cache", async () => {
+                    const blockNumbers = [100, 101];
+
+                    const provider1Cache = {
+                        blockNumber: blockNumbers[0],
+                    };
+
+                    const provider2Cache = {
+                        blockNumber: blockNumbers[1],
+                    };
+
+                    const provider1GetStoredBlockNumber = jest.fn(async () => provider1Cache.blockNumber);
+                    const provider1SetStoredBlockNumber = jest.fn(async (blockNumber) => {
+                        provider1Cache.blockNumber = blockNumber;
+                    });
+
+                    const provider2GetStoredBlockNumber = jest.fn(async () => provider2Cache.blockNumber);
+                    const provider2SetStoredBlockNumber = jest.fn(async (blockNumber) => {
+                        provider2Cache.blockNumber = blockNumber;
+                    });
+
+                    const provider1 = new MockProvider("1", 1, blockNumbers[0]);
+                    const provider2 = new MockProvider("2", 1, blockNumbers[1]);
+                    provider = new FallbackProvider(
+                        [
+                            {
+                                provider: provider1,
+                                getStoredBlockNumber: provider1GetStoredBlockNumber,
+                                setStoredBlockNumber: provider1SetStoredBlockNumber,
+                            },
+                            {
+                                provider: provider2,
+                                getStoredBlockNumber: provider2GetStoredBlockNumber,
+                                setStoredBlockNumber: provider2SetStoredBlockNumber,
+                            },
+                        ],
+                        undefined,
+                        undefined,
+                        undefined,
+                        LIVELINESS_FALLBACK_OPTIONS,
+                    );
+
+                    // Wait some time for the liveliness check to run
+                    await wait(
+                        LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 1000,
+                    );
+
+                    expect(provider1GetStoredBlockNumber).toHaveBeenCalled();
+                    expect(provider2GetStoredBlockNumber).toHaveBeenCalled();
+
+                    expect(provider1SetStoredBlockNumber).not.toHaveBeenCalled();
+                    expect(provider2SetStoredBlockNumber).not.toHaveBeenCalled();
+                });
             });
         });
 
