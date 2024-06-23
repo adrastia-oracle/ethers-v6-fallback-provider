@@ -52,6 +52,7 @@ export interface ProviderConfig {
 export interface LoggingOptions {
     debug?: (message: string, metadata?: any) => void;
     info?: (message: string, metadata?: any) => void;
+    notice?: (message: string, metadata?: any) => void;
     warn?: (message: string, metadata?: any) => void;
     error?: (message: string, metadata?: any) => void;
 }
@@ -484,6 +485,8 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
     private async _livelinessCheck() {
         const providersToCheck = this.#providers;
+        const lastActiveProviders = this.#activeProviders;
+        const activeProviderIds = lastActiveProviders.map((p) => p.id);
 
         let goodProviders: ProviderConfig[] = [];
 
@@ -518,6 +521,30 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 if (blockNumberCall.blockNumber >= minBlockNumber) {
                     goodProviders.push(providersToCheck[i]);
                 }
+            }
+
+            let providerListChanged = false;
+
+            // Log added providers
+            const addedProviders = goodProviders.filter((p) => !activeProviderIds.includes(p.id));
+            addedProviders.forEach((p) => {
+                providerListChanged = true;
+
+                this.#logging?.info?.(`[FallbackProvider] Provider ${p.id} is now active`);
+            });
+
+            // Log removed providers
+            const removedProviders = lastActiveProviders.filter((p) => !goodProviders.includes(p));
+            removedProviders.forEach((p) => {
+                providerListChanged = true;
+
+                this.#logging?.info?.(`[FallbackProvider] Provider ${p.id} is now inactive`);
+            });
+
+            if (providerListChanged) {
+                this.#logging?.notice?.(
+                    `[FallbackProvider] Active providers is now: ${goodProviders.map((p) => p.id).join(", ")}`,
+                );
             }
 
             this.#activeProviders = goodProviders;
