@@ -1,8 +1,15 @@
 import { JsonRpcApiProvider, JsonRpcError, JsonRpcPayload, JsonRpcResult, Network } from "ethers";
 
 export default class MockProvider extends JsonRpcApiProvider {
-    constructor(protected _id: string, protected _networkId = 1, public blockNumber = 1) {
-        super(_networkId);
+    constructor(
+        protected _id: string,
+        protected _networkId = 1,
+        public blockNumber = 1,
+    ) {
+        super(_networkId, {
+            cacheTimeout: -1, // Disable caching
+            batchMaxCount: 1, // Disable batching
+        });
     }
 
     async _detectNetwork(): Promise<Network> {

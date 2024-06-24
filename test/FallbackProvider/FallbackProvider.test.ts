@@ -4,6 +4,7 @@ import {
     FallbackProviderError,
     FallbackProviderOptions,
     filterValidProviders,
+    getBlockNumber,
     getBlockNumbersAndMedian,
 } from "../../src/FallbackProvider";
 import { wait } from "../../src/utils/promises";
@@ -62,11 +63,96 @@ describe("FallbackProvider", () => {
         });
     });
 
+    describe("getBlockNumber11", () => {
+        it("failing and doesn't use retries if that option is set to zero", async () => {
+            const provider = new FailingProvider("1", 1, 10);
+
+            jest.spyOn(provider, "send");
+
+            await expect(
+                getBlockNumber({
+                    provider,
+                    retries: 0,
+                }),
+            ).rejects.toThrow("Failing provider used: 1");
+
+            expect(provider.send).toHaveBeenCalledTimes(1);
+        });
+
+        it("failing and retries once", async () => {
+            const provider = new FailingProvider("1", 1, 10);
+
+            jest.spyOn(provider, "send");
+
+            const blockNumber = await getBlockNumber({
+                provider,
+                retries: 1,
+            });
+
+            expect(blockNumber).toEqual(10);
+
+            expect(provider.send).toHaveBeenCalledTimes(2);
+        });
+
+        it("failing and retries twice", async () => {
+            const provider = new FailingProvider("1", 2, 10);
+
+            jest.spyOn(provider, "send");
+
+            const blockNumber = await getBlockNumber({
+                provider,
+                retries: 2,
+            });
+
+            expect(blockNumber).toEqual(10);
+
+            expect(provider.send).toHaveBeenCalledTimes(3);
+        });
+    });
+
     describe("getBlockNumbersAndMedian", () => {
         it("should throw an error if no provider is provided", async () => {
             await expect(getBlockNumbersAndMedian([])).rejects.toThrowError(
                 FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE,
             );
+        });
+
+        it("should use retries with failing providers", async () => {
+            const underlyingBlockNumbers = [10, 11, 12];
+
+            const provider1 = new FailingProvider("1", 1, underlyingBlockNumbers[0]);
+            const provider2 = new FailingProvider("2", 1, underlyingBlockNumbers[1]);
+            const provider3 = new MockProvider("3", 1, underlyingBlockNumbers[2]);
+
+            jest.spyOn(provider1, "send");
+            jest.spyOn(provider2, "send");
+            jest.spyOn(provider3, "send");
+
+            const { blockNumbers, median } = await getBlockNumbersAndMedian([
+                {
+                    provider: provider1,
+                    retries: 1,
+                },
+                {
+                    provider: provider2,
+                    retries: 1,
+                },
+                {
+                    provider: provider3,
+                    retries: 1,
+                },
+            ]);
+
+            expect(blockNumbers).toEqual([
+                { blockNumber: underlyingBlockNumbers[0], fromCache: false },
+                { blockNumber: underlyingBlockNumbers[1], fromCache: false },
+                { blockNumber: underlyingBlockNumbers[2], fromCache: false },
+            ]);
+            expect(median).toEqual(underlyingBlockNumbers[1]);
+
+            expect(provider1.send).toHaveBeenCalledTimes(2);
+            expect(provider2.send).toHaveBeenCalledTimes(2);
+            expect(provider3.send).toHaveBeenCalledTimes(1);
         });
 
         it("should report null for stalling providers", async () => {

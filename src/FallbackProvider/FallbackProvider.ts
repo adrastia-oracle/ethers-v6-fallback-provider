@@ -20,6 +20,7 @@ export enum FallbackProviderError {
     HALTED = "Chain has halted",
     INVALID_FALLBACK_OPTIONS = "Invalid fallback options",
     BLOCK_NUMBER_STORAGE_CONFIG_ERROR = "Both getStoredBlockNumber and setStoredBlockNumber must be provided or neither",
+    FAILED_TO_GET_BLOCKNUMBER = "Failed to get block number",
 }
 export const DEFAULT_RETRIES = 0;
 export const DEFAULT_TIMEOUT = 3_000;
@@ -164,18 +165,44 @@ export async function getBlockNumberWithTimeout(provider: JsonRpcApiProvider, ti
     });
 }
 
+export async function getBlockNumber(providerConfig: ProviderConfig): Promise<number> {
+    let attempts = 0;
+
+    const retries = providerConfig.retries ?? DEFAULT_RETRIES;
+    const retryDelay = providerConfig.retryDelay ?? RETRY_DELAY;
+    const timeout = providerConfig.timeout ?? DEFAULT_TIMEOUT;
+
+    while (attempts <= retries) {
+        try {
+            const blockNumber = await getBlockNumberWithTimeout(providerConfig.provider, timeout);
+
+            return blockNumber;
+        } catch (e) {
+            if (++attempts > retries) {
+                throw e;
+            }
+        }
+
+        const delay = Math.ceil(Math.random() * (retryDelay ?? RETRY_DELAY));
+        await wait(delay);
+    }
+
+    throw new Error(FallbackProviderError.FAILED_TO_GET_BLOCKNUMBER);
+}
+
 export const getBlockNumbersAndMedian = async (providers: ProviderConfig[], logging?: LoggingOptions) => {
     const blockNumbers = await Promise.all(
-        providers.map(({ provider, timeout, getStoredBlockNumber }) => {
+        providers.map((provider) => {
             const getProviderPromise = () =>
-                getBlockNumberWithTimeout(provider, timeout ?? DEFAULT_TIMEOUT)
+                getBlockNumber(provider)
                     .then((blockNumber) => {
                         return { blockNumber: blockNumber, fromCache: false };
                     })
                     .catch(() => null);
 
-            if (getStoredBlockNumber) {
-                return getStoredBlockNumber()
+            if (provider.getStoredBlockNumber) {
+                return provider
+                    .getStoredBlockNumber()
                     .then((blockNumber) => {
                         if (blockNumber === null) {
                             return getProviderPromise();
