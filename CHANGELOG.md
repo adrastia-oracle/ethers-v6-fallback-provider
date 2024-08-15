@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.0 (2024-AUG-14)
+
+-   Adds the ability to only broadcast a transaction to MEV-protected providers.
+
 ## v1.3.0 (2024-JUN-24)
 
 -   Adds block number caching support for liveliness checks.
