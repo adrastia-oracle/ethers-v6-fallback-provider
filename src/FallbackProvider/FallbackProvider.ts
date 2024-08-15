@@ -32,6 +32,7 @@ export interface ProviderConfig {
     timeout?: number;
     retryDelay?: number;
     id?: string;
+    isMevProtected?: boolean;
 
     /**
      * Gets the stored block number when conducting a liveliness check.
@@ -113,6 +114,11 @@ export type FallbackProviderOptions = {
      * provider will broadcast the transaction in the same fashion as all other calls. Default: false.
      */
     broadcastToAll?: boolean;
+
+    /**
+     * If true, the provider will only broadcast signed transactions to MEV-protected providers. Default: false.
+     */
+    broadcastOnlyToMevProtected?: boolean;
 };
 
 export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
@@ -120,6 +126,7 @@ export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
     haltDetectionTime: 5 * 60, // 5 minutes
     livelinessPollingInterval: 0, // Disabled
     broadcastToAll: false,
+    broadcastOnlyToMevProtected: false,
 };
 
 export const filterValidProviders = async (providers: ProviderConfig[]) => {
@@ -414,7 +421,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
             throw new Error(FallbackProviderError.HALTED);
         }
 
-        const providersToUse = this.#activeProviders;
+        let providersToUse = this.#activeProviders;
         if (providersToUse.length === 0) {
             throw new Error(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
         }
@@ -422,6 +429,18 @@ export class FallbackProvider extends JsonRpcApiProvider {
         if (method === "eth_chainId") {
             return (await filterValidProviders(providersToUse)).network.chainId;
         } else if (method === "eth_sendRawTransaction") {
+            // Check if we should only broadcast to MEV-protected providers.
+            const broadcastOnlyToMevProtected =
+                this.#fallbackOptions.broadcastOnlyToMevProtected ??
+                DEFAULT_FALLBACK_OPTIONS.broadcastOnlyToMevProtected;
+            if (broadcastOnlyToMevProtected) {
+                // Filter out the MEV-protected providers.
+                providersToUse = providersToUse.filter((provider) => provider.isMevProtected);
+                if (providersToUse.length === 0) {
+                    throw new Error(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
+                }
+            }
+
             // Check if we should broadcast to all providers.
             const broadcastToAll = this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
             if (broadcastToAll) {

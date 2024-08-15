@@ -573,6 +573,85 @@ describe("FallbackProvider", () => {
             expect(res).toEqual("2");
         });
 
+        it("Should only broadcast to the first MEV-protected provider when desired", async () => {
+            const provider1 = new MockProvider("1");
+            const provider2 = new MockProvider("2");
+            const provider3 = new MockProvider("3");
+            provider = new FallbackProvider(
+                [
+                    {
+                        provider: provider1,
+                        isMevProtected: false,
+                    },
+                    {
+                        provider: provider2,
+                        isMevProtected: true,
+                    },
+                    {
+                        provider: provider3,
+                        isMevProtected: true,
+                    },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    broadcastOnlyToMevProtected: true,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+            jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+            const res = await provider.send("eth_sendRawTransaction", {});
+
+            expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            expect(res).toEqual("2");
+        });
+
+        it("Should fail to broadcast if no MEV-protected provider is available and we only broadcast to MEV-protected providers", async () => {
+            const provider1 = new MockProvider("1");
+            const provider2 = new MockProvider("2");
+            const provider3 = new MockProvider("3");
+            provider = new FallbackProvider(
+                [
+                    {
+                        provider: provider1,
+                        isMevProtected: false,
+                    },
+                    {
+                        provider: provider2,
+                        isMevProtected: false,
+                    },
+                    {
+                        provider: provider3,
+                        isMevProtected: false,
+                    },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    broadcastOnlyToMevProtected: true,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+            jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+            await expect(provider.send("eth_sendRawTransaction", {})).rejects.toThrowError(
+                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE,
+            );
+
+            expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+        });
+
         describe("Websocket providers", () => {
             it("should fallback if the websocket is closing", async () => {
                 const provider1 = new MockWebsocketProvider("1");
@@ -1326,6 +1405,39 @@ describe("FallbackProvider", () => {
 
                 expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(retries + 1);
                 expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(retries + 1);
+            });
+
+            it("Should only broadcast to MEV-protected providers when desired", async () => {
+                const provider1 = new MockProvider("1", 1, 1);
+                const provider2 = new MockProvider("2", 1, 1);
+                provider = new FallbackProvider(
+                    [
+                        {
+                            provider: provider1,
+                            isMevProtected: false,
+                        },
+                        {
+                            provider: provider2,
+                            isMevProtected: true,
+                        },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        broadcastToAll: true,
+                        broadcastOnlyToMevProtected: true,
+                    },
+                );
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("2");
             });
         });
     });
