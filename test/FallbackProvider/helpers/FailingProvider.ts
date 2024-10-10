@@ -1,9 +1,15 @@
+import { ErrorCode, makeError } from "ethers";
 import MockProvider from "./MockProvider";
 
 export default class FailingProvider extends MockProvider {
     failureCount = 0;
 
-    constructor(_id: string, protected _numberOfFailures = 100, protected _blockNumber = 1) {
+    constructor(
+        _id: string,
+        protected _numberOfFailures = 100,
+        protected _blockNumber = 1,
+        protected _errorCode: ErrorCode = "NETWORK_ERROR",
+    ) {
         super(_id);
     }
 
@@ -19,7 +25,7 @@ export default class FailingProvider extends MockProvider {
             return this._id;
         }
 
-        throw Error("Failing provider used: " + this._id);
+        throw makeError("Failing provider used: " + this._id, this._errorCode);
     }
 
     async send(method: string, params: { [name: string]: any }): Promise<any> {

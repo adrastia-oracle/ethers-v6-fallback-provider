@@ -544,6 +544,258 @@ describe("FallbackProvider", () => {
             expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
         });
 
+        it("should throw the first CALL_EXCEPTION error", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "CALL_EXCEPTION");
+            const provider2 = new FailingProvider("2", 100, 1, "CALL_EXCEPTION");
+            provider = new FallbackProvider([
+                { provider: provider1, retries: 2 },
+                { provider: provider2, retries: 2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
+        });
+
+        it("should throw the first INSUFFICIENT_FUNDS error", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "INSUFFICIENT_FUNDS");
+            const provider2 = new FailingProvider("2", 100, 1, "INSUFFICIENT_FUNDS");
+            provider = new FallbackProvider([
+                { provider: provider1, retries: 2 },
+                { provider: provider2, retries: 2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
+        });
+
+        it("should throw the first NONCE_EXPIRED error", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "NONCE_EXPIRED");
+            const provider2 = new FailingProvider("2", 100, 1, "NONCE_EXPIRED");
+            provider = new FallbackProvider([
+                { provider: provider1, retries: 2 },
+                { provider: provider2, retries: 2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
+        });
+
+        it("should throw the first REPLACEMENT_UNDERPRICED error", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "REPLACEMENT_UNDERPRICED");
+            const provider2 = new FailingProvider("2", 100, 1, "REPLACEMENT_UNDERPRICED");
+            provider = new FallbackProvider([
+                { provider: provider1, retries: 2 },
+                { provider: provider2, retries: 2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
+        });
+
+        it("should throw the first TRANSACTION_REPLACED error", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "TRANSACTION_REPLACED");
+            const provider2 = new FailingProvider("2", 100, 1, "TRANSACTION_REPLACED");
+            provider = new FallbackProvider([
+                { provider: provider1, retries: 2 },
+                { provider: provider2, retries: 2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
+        });
+
+        it("should throw the first UNCONFIGURED_NAME error", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "UNCONFIGURED_NAME");
+            const provider2 = new FailingProvider("2", 100, 1, "UNCONFIGURED_NAME");
+            provider = new FallbackProvider([
+                { provider: provider1, retries: 2 },
+                { provider: provider2, retries: 2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
+        });
+
+        it("should not throw the first CALL_EXCEPTION error when the option is disabled", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "CALL_EXCEPTION");
+            const provider2 = new FailingProvider("2", 100, 1, "CALL_EXCEPTION");
+            provider = new FallbackProvider(
+                [
+                    { provider: provider1, retries: 2 },
+                    { provider: provider2, retries: 2 },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    throwOnFirstBlockchainError: false,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 2");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+        });
+
+        it("should not throw the first INSUFFICIENT_FUNDS error when the option is disabled", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "INSUFFICIENT_FUNDS");
+            const provider2 = new FailingProvider("2", 100, 1, "INSUFFICIENT_FUNDS");
+            provider = new FallbackProvider(
+                [
+                    { provider: provider1, retries: 2 },
+                    { provider: provider2, retries: 2 },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    throwOnFirstBlockchainError: false,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 2");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+        });
+
+        it("should not throw the first NONCE_EXPIRED error when the option is disabled", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "NONCE_EXPIRED");
+            const provider2 = new FailingProvider("2", 100, 1, "NONCE_EXPIRED");
+            provider = new FallbackProvider(
+                [
+                    { provider: provider1, retries: 2 },
+                    { provider: provider2, retries: 2 },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    throwOnFirstBlockchainError: false,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 2");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+        });
+
+        it("should not throw the first REPLACEMENT_UNDERPRICED error when the option is disabled", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "REPLACEMENT_UNDERPRICED");
+            const provider2 = new FailingProvider("2", 100, 1, "REPLACEMENT_UNDERPRICED");
+            provider = new FallbackProvider(
+                [
+                    { provider: provider1, retries: 2 },
+                    { provider: provider2, retries: 2 },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    throwOnFirstBlockchainError: false,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 2");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+        });
+
+        it("should not throw the first TRANSACTION_REPLACED error when the option is disabled", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "TRANSACTION_REPLACED");
+            const provider2 = new FailingProvider("2", 100, 1, "TRANSACTION_REPLACED");
+            provider = new FallbackProvider(
+                [
+                    { provider: provider1, retries: 2 },
+                    { provider: provider2, retries: 2 },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    throwOnFirstBlockchainError: false,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 2");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+        });
+
+        it("should not throw the first UNCONFIGURED_NAME error when the option is disabled", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "UNCONFIGURED_NAME");
+            const provider2 = new FailingProvider("2", 100, 1, "UNCONFIGURED_NAME");
+            provider = new FallbackProvider(
+                [
+                    { provider: provider1, retries: 2 },
+                    { provider: provider2, retries: 2 },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                {
+                    throwOnFirstBlockchainError: false,
+                },
+            );
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 2");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(3);
+        });
+
         it("should retry the first provider", async () => {
             const provider1 = new FailingProvider("1", 1);
             const provider2 = new FailingProvider("2");

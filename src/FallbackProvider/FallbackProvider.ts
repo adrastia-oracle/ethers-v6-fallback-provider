@@ -1,6 +1,7 @@
 import { promiseWithTimeout, wait } from "../utils/promises";
 import { isWebSocketProvider } from "../utils/ws-util";
 import {
+    isError,
     JsonRpcApiProvider,
     JsonRpcApiProviderOptions,
     JsonRpcError,
@@ -119,6 +120,22 @@ export type FallbackProviderOptions = {
      * If true, the provider will only broadcast signed transactions to MEV-protected providers. Default: false.
      */
     broadcastOnlyToMevProtected?: boolean;
+
+    /**
+     * If true, the provider will throw on the first blockchain error it encounters. Default: true.
+     *
+     * Matching errors:
+     * - CALL_EXCEPTION
+     * - INSUFFICIENT_FUNDS
+     * - NONCE_EXPIRED
+     * - REPLACEMENT_UNDERPRICED
+     * - TRANSACTION_REPLACED
+     * - UNCONFIGURED_NAME
+     *
+     * Non-matching blockchain errors (not exhaustive):
+     * - OFFCHAIN_FAULT
+     */
+    throwOnFirstBlockchainError?: boolean;
 };
 
 export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
@@ -128,6 +145,17 @@ export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
     broadcastToAll: false,
     broadcastOnlyToMevProtected: false,
 };
+
+export function isBlockchainError(e: any): boolean {
+    return (
+        isError(e, "CALL_EXCEPTION") ||
+        isError(e, "INSUFFICIENT_FUNDS") ||
+        isError(e, "NONCE_EXPIRED") ||
+        isError(e, "REPLACEMENT_UNDERPRICED") ||
+        isError(e, "TRANSACTION_REPLACED") ||
+        isError(e, "UNCONFIGURED_NAME")
+    );
+}
 
 export const filterValidProviders = async (providers: ProviderConfig[]) => {
     if (providers.length === 0) throw new Error(FallbackProviderError.NO_PROVIDER);
@@ -387,7 +415,11 @@ export class FallbackProvider extends JsonRpcApiProvider {
             }
 
             return await promiseWithTimeout(provider.send(method, params), timeout ?? DEFAULT_TIMEOUT);
-        } catch (e) {
+        } catch (e: any) {
+            if ((this.#fallbackOptions.throwOnFirstBlockchainError ?? true) && isBlockchainError(e)) {
+                throw e;
+            }
+
             if (retries < (maxRetries ?? DEFAULT_RETRIES)) {
                 // Wait for a random time before retrying.
                 const delay = Math.ceil(Math.random() * (retryDelay ?? RETRY_DELAY));
