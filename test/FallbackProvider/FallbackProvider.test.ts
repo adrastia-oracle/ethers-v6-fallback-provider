@@ -544,6 +544,17 @@ describe("FallbackProvider", () => {
             expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
         });
 
+        it("should attach the provider IDs to the error object", async () => {
+            const provider1 = new FailingProvider("1");
+            const provider2 = new FailingProvider("2");
+            provider = new FallbackProvider([
+                { provider: provider1, id: "1" },
+                { provider: provider2, id: "2" },
+            ]);
+
+            await expect(provider.send("send", {})).rejects.toHaveProperty("providerIds", ["1", "2"]);
+        });
+
         it("should throw the first CALL_EXCEPTION error", async () => {
             const provider1 = new FailingProvider("1", 100, 1, "CALL_EXCEPTION");
             const provider2 = new FailingProvider("2", 100, 1, "CALL_EXCEPTION");
@@ -1630,6 +1641,28 @@ describe("FallbackProvider", () => {
 
                 expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
                 expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            });
+
+            it("Should attach provider IDs to the error object if all providers are failing", async () => {
+                const provider1 = new FailingProvider("1");
+                const provider2 = new FailingProvider("2");
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, id: "1" },
+                        { provider: provider2, id: "2" },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        broadcastToAll: true,
+                    },
+                );
+
+                await expect(provider.send("eth_sendRawTransaction", {})).rejects.toHaveProperty("providerIds", [
+                    "1",
+                    "2",
+                ]);
             });
 
             it("Should retry all failing providers", async () => {

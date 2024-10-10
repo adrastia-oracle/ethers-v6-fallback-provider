@@ -477,7 +477,14 @@ export class FallbackProvider extends JsonRpcApiProvider {
             const broadcastToAll = this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
             if (broadcastToAll) {
                 // Broadcast to all providers.
-                const promises = providersToUse.map((provider) => this.sendWithProvider([provider], 0, method, params));
+                const promises = providersToUse.map((provider) =>
+                    this.sendWithProvider([provider], 0, method, params).catch((e) => {
+                        // Attach the list of provider IDs to the error.
+                        e.providerIds = providersToUse.map((p) => p.id);
+
+                        throw e;
+                    }),
+                );
 
                 try {
                     // Wait for the first result.
@@ -491,7 +498,12 @@ export class FallbackProvider extends JsonRpcApiProvider {
             }
         }
 
-        return this.sendWithProvider(providersToUse, 0, method, params);
+        return this.sendWithProvider(providersToUse, 0, method, params).catch((e) => {
+            // Attach the list of provider IDs to the error.
+            e.providerIds = providersToUse.map((p) => p.id);
+
+            throw e;
+        });
     }
 
     async _send(payload: JsonRpcPayload | Array<JsonRpcPayload>): Promise<Array<JsonRpcResult | JsonRpcError>> {
