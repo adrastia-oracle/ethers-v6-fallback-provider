@@ -1,18 +1,17 @@
 {
-  "compilerOptions": {
-    "incremental": true,
-    "target": "es2021",
-    "module": "commonjs",
-    "declaration": true,
-    "outDir": "lib",
-    "rootDir": ".",
-    "baseUrl": ".",
-    "moduleResolution": "node",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
-  },
-  "include": ["src", "test"]
+    "compilerOptions": {
+        "target": "es2021",
+        "module": "commonjs",
+        "declaration": true,
+        "outDir": "lib",
+        "rootDir": ".",
+        "baseUrl": ".",
+        "moduleResolution": "node",
+        "strict": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true
+    },
+    "include": ["src", "test"]
 }
