@@ -401,8 +401,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
                         try {
                             return await this.sendWithProvider(providers, providerIndex + 1, method, params);
-                        } catch (e2) {
-                            console.warn(`[FallbackProvider] Fallback failed: ${e2}`);
+                        } catch (e2: any) {
+                            console.warn(`[FallbackProvider] Fallback failed: ${e2.message}`, {
+                                error: e2,
+                            });
                         }
                     }
 
@@ -427,7 +429,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
                     this.#logging?.debug?.(
                         `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying in ${delay}ms (${
                             retries + 1
-                        }/${maxRetries}) \n\n${e}`,
+                        }/${maxRetries}): ${e.message}`,
+                        {
+                            error: e,
+                        },
                     );
                     await wait(delay);
                 }
@@ -439,7 +444,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
             this.#logging?.warn?.(
                 `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying with provider ${
                     nextProviderId
-                }\n\n${e}`,
+                }: ${e.message}`,
+                {
+                    error: e,
+                },
             );
             return this.sendWithProvider(providers, providerIndex + 1, method, params);
         }
