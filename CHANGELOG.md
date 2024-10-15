@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.1 (2024-OCT-14)
+
+-   Upgrades ethers to v6.13.4
+
 ## v1.5.0 (2024-OCT-14)
 
 -   Adds functionality to throw the first blockchain error rather than retrying with the next provider (enabled by default).
