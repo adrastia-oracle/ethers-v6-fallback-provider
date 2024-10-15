@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.0 (2024-OCT-14)
+
+-   Adds functionality to throw the first blockchain error rather than retrying with the next provider (enabled by default).
+-   Attaches the provider ID list to error objects.
+-   Improves error logging.
+-   Upgrades ethers to v6.13.3 and upgrades various dev dependencies.
+
 ## v1.4.0 (2024-AUG-14)
 
 -   Adds the ability to only broadcast a transaction to MEV-protected providers.
