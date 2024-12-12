@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.2 (2024-DEC-11)
+
+-   Correctly identify some specific server errors as such
+    -   If throwOnFirstBlockchainError is true, it will not immediately throw errors such as 'intrinsic gas too low', 'evm module does not exist on height'
+-   Properly set the default throwOnFirstBlockchainError
+    -   This is just semantics; functionally, it was already set to true by default
+
 ## v1.5.1 (2024-OCT-14)
 
 -   Upgrades ethers to v6.13.4
