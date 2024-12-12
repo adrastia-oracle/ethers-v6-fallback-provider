@@ -144,6 +144,7 @@ export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
     livelinessPollingInterval: 0, // Disabled
     broadcastToAll: false,
     broadcastOnlyToMevProtected: false,
+    throwOnFirstBlockchainError: true,
 };
 
 export function isBlockchainError(e: any): boolean {
@@ -430,7 +431,11 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
             return await promiseWithTimeout(provider.send(method, params), timeout ?? DEFAULT_TIMEOUT);
         } catch (e: any) {
-            if ((this.#fallbackOptions.throwOnFirstBlockchainError ?? true) && isBlockchainError(e)) {
+            if (
+                (this.#fallbackOptions.throwOnFirstBlockchainError ??
+                    DEFAULT_FALLBACK_OPTIONS.throwOnFirstBlockchainError) &&
+                isBlockchainError(e)
+            ) {
                 throw e;
             }
 
