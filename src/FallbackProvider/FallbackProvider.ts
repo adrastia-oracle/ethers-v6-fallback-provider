@@ -150,11 +150,12 @@ export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
 export function isBlockchainError(e: any): boolean {
     const isCallException = isError(e, "CALL_EXCEPTION");
     if (isCallException) {
-        // Check if the error is "intrinsic gas too low" or "evm module does not exist on height"
         // These are server errors and should not be considered blockchain errors.
         if (
             e?.info?.error?.message?.includes("intrinsic gas too low") ||
-            e?.info?.error?.message?.includes("evm module does not exist on height")
+            e?.info?.error?.message?.includes("evm module does not exist on height") ||
+            e?.info?.error?.message === "header not found" ||
+            e?.info?.error?.message === "Unable to perform request"
         ) {
             return false;
         }
