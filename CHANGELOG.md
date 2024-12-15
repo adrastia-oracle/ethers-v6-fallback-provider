@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.3 (2024-DEC-14)
+
+-   Recognize "header not found" and "Unable to perform request" errors as server errors
+
 ## v1.5.2 (2024-DEC-11)
 
 -   Correctly identify some specific server errors as such
