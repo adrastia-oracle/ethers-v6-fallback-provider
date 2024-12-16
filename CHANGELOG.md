@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.4 (2024-DEC-15)
+
+-   Recognize "height must be greater than zero" and "missing trie node" errors as server errors
+
 ## v1.5.3 (2024-DEC-14)
 
 -   Recognize "header not found" and "Unable to perform request" errors as server errors

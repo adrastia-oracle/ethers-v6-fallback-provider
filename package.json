@@ -1,6 +1,6 @@
 {
     "name": "@adrastia-oracle/ethers-v6-fallback-provider",
-    "version": "1.5.3",
+    "version": "1.5.4",
     "description": "Package providing a fallback provider based on ethers-v6, adding more resilience.",
     "main": "lib/FallbackProvider/index.js",
     "files": [
