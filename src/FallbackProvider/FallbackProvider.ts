@@ -155,7 +155,9 @@ export function isBlockchainError(e: any): boolean {
             e?.info?.error?.message?.includes("intrinsic gas too low") ||
             e?.info?.error?.message?.includes("evm module does not exist on height") ||
             e?.info?.error?.message === "header not found" ||
-            e?.info?.error?.message === "Unable to perform request"
+            e?.info?.error?.message === "Unable to perform request" ||
+            e?.info?.error?.message?.includes("height must be greater than zero") ||
+            e?.info?.error?.message?.includes("missing trie node")
         ) {
             return false;
         }
