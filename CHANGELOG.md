@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.5 (2025-JAN-08)
+
+-   Add catch-all to classify all errors without revert data as non-blockchain errors so that we try the next provider if available
+
 ## v1.5.4 (2024-DEC-15)
 
 -   Recognize "height must be greater than zero" and "missing trie node" errors as server errors
