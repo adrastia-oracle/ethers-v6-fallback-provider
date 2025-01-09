@@ -161,6 +161,11 @@ export function isBlockchainError(e: any): boolean {
         ) {
             return false;
         }
+
+        // Catch-all, as catching the errors in the style above is not exhaustive.
+        if (e.shortMessage === "missing revert data") {
+            return false;
+        }
     }
 
     return (
