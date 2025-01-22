@@ -57,7 +57,7 @@
         "typescript": "^5.4.5"
     },
     "peerDependencies": {
-        "ethers": "^6.13.1"
+        "ethers": "^6.13.5"
     },
     "lint-staged": {
         "*.ts": "eslint --cache --cache-location .eslintcache --fix"
