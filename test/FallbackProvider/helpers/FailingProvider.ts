@@ -1,5 +1,6 @@
 import { ErrorCode, makeError } from "ethers";
 import MockProvider from "./MockProvider";
+import { wait } from "../../../src/utils/promises";
 
 export default class FailingProvider extends MockProvider {
     failureCount = 0;
@@ -9,11 +10,16 @@ export default class FailingProvider extends MockProvider {
         protected _numberOfFailures = 100,
         protected _blockNumber = 1,
         protected _errorCode: ErrorCode = "NETWORK_ERROR",
+        _delay = 0,
     ) {
-        super(_id);
+        super(_id, undefined, undefined, _delay);
     }
 
     async sendNonBlockNumberCall(method: string, params: { [name: string]: any }): Promise<any> {
+        if (this.delay) {
+            await wait(this.delay);
+        }
+
         this.failureCount++;
         if (this.failureCount > this._numberOfFailures) {
             this.failureCount = 0;

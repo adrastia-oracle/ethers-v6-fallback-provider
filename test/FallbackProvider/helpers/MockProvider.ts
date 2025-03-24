@@ -1,10 +1,12 @@
 import { JsonRpcApiProvider, JsonRpcError, JsonRpcPayload, JsonRpcResult, Network } from "ethers";
+import { wait } from "../../../src/utils/promises";
 
 export default class MockProvider extends JsonRpcApiProvider {
     constructor(
         protected _id: string,
         protected _networkId = 1,
         public blockNumber = 1,
+        protected delay = 0,
     ) {
         super(_networkId, {
             cacheTimeout: -1, // Disable caching
@@ -22,6 +24,10 @@ export default class MockProvider extends JsonRpcApiProvider {
     }
 
     async sendNonBlockNumberCall(method: string, params: { [name: string]: any }): Promise<any> {
+        if (this.delay) {
+            await wait(this.delay);
+        }
+
         return this._id;
     }
 

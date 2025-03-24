@@ -1,4 +1,4 @@
-import { promiseWithTimeout, wait } from "../utils/promises";
+import { checkAllRejected, checkAnyResolved, promiseWithTimeout, wait } from "../utils/promises";
 import { isWebSocketProvider } from "../utils/ws-util";
 import {
     isError,
@@ -387,9 +387,18 @@ export class FallbackProvider extends JsonRpcApiProvider {
         providerIndex: number,
         method: string,
         params: { [name: string]: any },
+        promises: Promise<any>[] = new Array(),
         retries = 0,
         useFallback = true,
     ): Promise<any> {
+        if (promises.length > 0) {
+            // Check if any of the past promises have successfully resolved. If so, return the first one.
+            const resolvedValue = await checkAnyResolved(promises);
+            if (resolvedValue != null) {
+                return resolvedValue;
+            }
+        }
+
         const { provider, retries: maxRetries, timeout, retryDelay, id } = providers[providerIndex];
 
         const nextProviderId = providerIndex < providers.length - 1 ? providers[providerIndex + 1].id : null;
@@ -410,7 +419,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                     }
 
                     // We have another provider to fallback to.
-                    return this.sendWithProvider(providers, providerIndex + 1, method, params);
+                    return this.sendWithProvider(providers, providerIndex + 1, method, params, promises);
                 }
 
                 if (readyState !== 1) {
@@ -421,7 +430,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                         );
 
                         try {
-                            return await this.sendWithProvider(providers, providerIndex + 1, method, params);
+                            return await this.sendWithProvider(providers, providerIndex + 1, method, params, promises);
                         } catch (e2: any) {
                             console.warn(`[FallbackProvider] Fallback failed: ${e2.message}`, {
                                 error: e2,
@@ -437,14 +446,42 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 }
             }
 
-            return await promiseWithTimeout(provider.send(method, params), timeout ?? DEFAULT_TIMEOUT);
+            const providerPromise = provider.send(method, params);
+
+            // Add the promise to the list of promises.
+            promises.push(providerPromise);
+
+            return await promiseWithTimeout(providerPromise, timeout ?? DEFAULT_TIMEOUT);
         } catch (e: any) {
+            // Check if any of the past promises have successfully resolved. If so, return the first one.
+            // It can be the case that a prior promise resolved after the current promise failed, such as when a transaction
+            // is mined, then this call fails to send a transaction because the nonce has already been used.
+            // This check reduces the likeliness of that happening.
+            const resolvedValue = await checkAnyResolved(promises);
+            if (resolvedValue != null) {
+                return resolvedValue;
+            }
+
             if (
-                (this.#fallbackOptions.throwOnFirstBlockchainError ??
-                    DEFAULT_FALLBACK_OPTIONS.throwOnFirstBlockchainError) &&
-                isBlockchainError(e)
+                this.#fallbackOptions.throwOnFirstBlockchainError ??
+                DEFAULT_FALLBACK_OPTIONS.throwOnFirstBlockchainError
             ) {
-                throw e;
+                if (promises.length === 1) {
+                    // If we only have one promise, we can check and throw the error immediately.
+                    if (isBlockchainError(e)) {
+                        throw e;
+                    }
+                } else {
+                    const allRejected = await checkAllRejected(promises);
+
+                    if (allRejected) {
+                        for (const rejected of allRejected) {
+                            if (isBlockchainError(rejected)) {
+                                throw rejected;
+                            }
+                        }
+                    }
+                }
             }
 
             if (retries < (maxRetries ?? DEFAULT_RETRIES)) {
@@ -462,9 +499,21 @@ export class FallbackProvider extends JsonRpcApiProvider {
                     await wait(delay);
                 }
 
-                return this.sendWithProvider(providers, providerIndex, method, params, retries + 1, useFallback);
+                return this.sendWithProvider(
+                    providers,
+                    providerIndex,
+                    method,
+                    params,
+                    promises,
+                    retries + 1,
+                    useFallback,
+                );
             }
-            if (providerIndex >= providers.length - 1 || !useFallback) throw e;
+            if (providerIndex >= providers.length - 1 || !useFallback) {
+                // No more retries or provides left to try. We've already checked pending promises so we can throw the error.
+
+                throw e;
+            }
 
             this.#logging?.warn?.(
                 `[FallbackProvider] Call to \`${method}\` failing with provider ${id}, retrying with provider ${
@@ -474,7 +523,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
                     error: e,
                 },
             );
-            return this.sendWithProvider(providers, providerIndex + 1, method, params);
+            return this.sendWithProvider(providers, providerIndex + 1, method, params, promises);
         }
     }
 
@@ -510,8 +559,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
             const broadcastToAll = this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
             if (broadcastToAll) {
                 // Broadcast to all providers.
+                const providerPromises = new Array();
+
                 const promises = providersToUse.map((provider) =>
-                    this.sendWithProvider([provider], 0, method, params).catch((e) => {
+                    this.sendWithProvider([provider], 0, method, params, providerPromises).catch((e) => {
                         // Attach the list of provider IDs to the error.
                         e.providerIds = providersToUse.map((p) => p.id);
 

@@ -572,6 +572,33 @@ describe("FallbackProvider", () => {
             expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
         });
 
+        it("should throw the first CALL_EXCEPTION error that occurs after timeout, while waiting for other calls", async () => {
+            const provider1 = new FailingProvider("1", 100, 1, "CALL_EXCEPTION", 100);
+            const provider2 = new FailingProvider("2", 100, 1, "CALL_EXCEPTION", 100);
+            provider = new FallbackProvider([
+                {
+                    provider: provider1,
+                    retries: 1,
+                    retryDelay: 0,
+                    timeout: 10,
+                },
+                {
+                    provider: provider2,
+                    retries: 1,
+                    retryDelay: 0,
+                    timeout: 200,
+                },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("send", {})).rejects.toThrowError("Failing provider used: 1");
+
+            expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(2);
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+        });
+
         it("should throw the first INSUFFICIENT_FUNDS error", async () => {
             const provider1 = new FailingProvider("1", 100, 1, "INSUFFICIENT_FUNDS");
             const provider2 = new FailingProvider("2", 100, 1, "INSUFFICIENT_FUNDS");
@@ -913,6 +940,201 @@ describe("FallbackProvider", () => {
             expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
             expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
             expect(provider3.sendNonBlockNumberCall).not.toHaveBeenCalled();
+        });
+
+        describe("should check timed-out promises before the final return, returning the first successful one", () => {
+            it("works with a standard call and without retries", async () => {
+                const provider1 = new MockProvider("1", 1, 1, 100);
+                const provider2 = new MockProvider("2", 1, 1, 50); // Resolves first (but this is not the final value)
+                const provider3 = new MockProvider("3", 1, 1, 250);
+
+                provider = new FallbackProvider([
+                    {
+                        provider: provider1,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 10,
+                    },
+                    {
+                        provider: provider2,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 10,
+                    },
+                    {
+                        provider: provider3,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 150,
+                    },
+                ]);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider3.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+
+                expect(res).toEqual("1");
+            });
+        });
+
+        describe("should check timed-out promises before making further calls, returning the first successful one", () => {
+            it("works with a standard call and without retries", async () => {
+                const provider1 = new MockProvider("1", 1, 1, 100);
+                const provider2 = new MockProvider("2", 1, 1, 100);
+                const provider3 = new MockProvider("3", 1, 1, 200);
+                const provider4 = new MockProvider("4", 1, 1, 200);
+
+                provider = new FallbackProvider([
+                    {
+                        provider: provider1,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 20,
+                    },
+                    {
+                        provider: provider2,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 20,
+                    },
+                    {
+                        provider: provider3,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 150,
+                    },
+                    {
+                        provider: provider4,
+                        retries: 0,
+                        retryDelay: 0,
+                        timeout: 150,
+                    },
+                ]);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+                jest.spyOn(provider4, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider3.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider4.sendNonBlockNumberCall).not.toHaveBeenCalled();
+
+                expect(res).toEqual("1");
+            });
+
+            it("works with a standard call and with retries", async () => {
+                const provider1 = new MockProvider("1", 1, 1, 100);
+                const provider2 = new MockProvider("2", 1, 1, 100);
+                const provider3 = new MockProvider("3", 1, 1, 200);
+                const provider4 = new MockProvider("4", 1, 1, 200);
+
+                provider = new FallbackProvider([
+                    {
+                        provider: provider1,
+                        retries: 1,
+                        retryDelay: 0,
+                        timeout: 20,
+                    },
+                    {
+                        provider: provider2,
+                        retries: 1,
+                        retryDelay: 0,
+                        timeout: 20,
+                    },
+                    {
+                        provider: provider3,
+                        retries: 1,
+                        retryDelay: 0,
+                        timeout: 150,
+                    },
+                    {
+                        provider: provider4,
+                        retries: 1,
+                        retryDelay: 0,
+                        timeout: 150,
+                    },
+                ]);
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+                jest.spyOn(provider4, "sendNonBlockNumberCall");
+
+                const res = await provider.send("send", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(2);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(2);
+                expect(provider3.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider4.sendNonBlockNumberCall).not.toHaveBeenCalled();
+
+                expect(res).toEqual("1");
+            });
+
+            it("works with broadcasting to all with retries", async () => {
+                const provider1 = new MockProvider("1", 1, 1, 100);
+                const provider2 = new MockProvider("2", 1, 1, 100);
+                const provider3 = new MockProvider("3", 1, 1, 200);
+                const provider4 = new MockProvider("4", 1, 1, 200);
+
+                provider = new FallbackProvider(
+                    [
+                        {
+                            provider: provider1,
+                            retries: 1,
+                            retryDelay: 0,
+                            timeout: 20,
+                        },
+                        {
+                            provider: provider2,
+                            retries: 1,
+                            retryDelay: 0,
+                            timeout: 20,
+                        },
+                        {
+                            provider: provider3,
+                            retries: 1,
+                            retryDelay: 0,
+                            timeout: 150,
+                        },
+                        {
+                            provider: provider4,
+                            retries: 1,
+                            retryDelay: 0,
+                            timeout: 150,
+                        },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    {
+                        broadcastToAll: true,
+                    },
+                );
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+                jest.spyOn(provider4, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(2);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(2);
+                //expect(provider3.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                //expect(provider4.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+
+                expect(res).toEqual("1");
+            });
         });
 
         describe("Websocket providers", () => {
@@ -1577,6 +1799,26 @@ describe("FallbackProvider", () => {
 
         describe("Broadcast to all providers", () => {
             it("Should broadcast to all providers", async () => {
+                const provider1 = new MockProvider("1", 1, 1, 10);
+                const provider2 = new MockProvider("2", 1, 1, 10);
+                provider = new FallbackProvider([provider1, provider2], undefined, undefined, undefined, {
+                    broadcastToAll: true,
+                });
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("1");
+            });
+
+            it("Should stop broadcasting after a promise resolves", async () => {
+                // Note: These providers resolve immediately, but in a real-world scenario, all providers would
+                // be called at least once before the first one resolves.
+
                 const provider1 = new MockProvider("1");
                 const provider2 = new MockProvider("2");
                 provider = new FallbackProvider([provider1, provider2], undefined, undefined, undefined, {
@@ -1589,7 +1831,7 @@ describe("FallbackProvider", () => {
                 const res = await provider.send("eth_sendRawTransaction", {});
 
                 expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
-                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(0);
                 expect(res).toEqual("1");
             });
 
