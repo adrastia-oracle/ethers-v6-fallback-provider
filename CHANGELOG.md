@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.6.0 (2025-MAR-24)
+
+- If any timed out promises have resolved, the first (in the order calls were sent) value will be returned
+- If any timed out promises have been rejected upon an exception (rejection or timeout), return the first (...) rejection
+- If any timed out promises resolve when broadcasting to all providers, the broadcast will stop and the first (...) resolved value will be returned
+
 ## v1.5.6 (2025-JAN-21)
 
 - Upgrade ethers to v6.13.5
