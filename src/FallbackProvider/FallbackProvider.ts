@@ -7,6 +7,7 @@ import {
     JsonRpcError,
     JsonRpcPayload,
     JsonRpcResult,
+    keccak256,
     Network,
     Networkish,
     WebSocketProvider,
@@ -176,6 +177,17 @@ export function isBlockchainError(e: any): boolean {
         isError(e, "TRANSACTION_REPLACED") ||
         isError(e, "UNCONFIGURED_NAME")
     );
+}
+
+export function isAlreadyKnownError(e: any): boolean {
+    const msg =
+        (typeof e?.message === "string" && e.message.toLowerCase()) ||
+        (typeof e?.error?.message === "string" && e.error.message.toLowerCase()) ||
+        (typeof e?.shortMessage === "string" && e.shortMessage.toLowerCase()) ||
+        (typeof e?.info?.error?.message === "string" && e.info.error.message.toLowerCase()) ||
+        "";
+
+    return msg.toLowerCase().includes("already known");
 }
 
 export const filterValidProviders = async (providers: ProviderConfig[]) => {
@@ -446,7 +458,31 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 }
             }
 
-            const providerPromise = provider.send(method, params);
+            let txHash: string | undefined;
+            if (method === "eth_sendRawTransaction" && Array.isArray(params) && typeof params[0] === "string") {
+                try {
+                    txHash = keccak256(params[0]); // raw tx hash
+                } catch (hashErr) {
+                    this.#logging?.warn?.("[FallbackProvider] Failed to compute tx hash from raw tx", {
+                        rawTx: params[0],
+                        error: hashErr,
+                    });
+                }
+            }
+
+            const providerPromise = provider.send(method, params).catch((e: any) => {
+                if (txHash && isAlreadyKnownError(e)) {
+                    // Optionally log a warning here
+                    this.#logging?.warn?.(`[FallbackProvider] Transaction already known, returning tx hash`, {
+                        transactionHash: txHash,
+                    });
+
+                    // Simulate successful eth_sendRawTransaction call
+                    return txHash;
+                }
+
+                throw e;
+            });
 
             // Add the promise to the list of promises.
             promises.push(providerPromise);
