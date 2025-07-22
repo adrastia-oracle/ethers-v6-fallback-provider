@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.7.0 (2025-JUL-22)
+
+- When sending a transaction, if an underlying provider returns an "already known" error, the transaction hash will be returned instead of throwing an error.
+
 ## v1.6.0 (2025-MAR-24)
 
 - If any timed out promises have resolved, the first (in the order calls were sent) value will be returned
