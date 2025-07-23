@@ -472,10 +472,16 @@ export class FallbackProvider extends JsonRpcApiProvider {
 
             const providerPromise = provider.send(method, params).catch((e: any) => {
                 if (txHash && isAlreadyKnownError(e)) {
-                    // Optionally log a warning here
-                    this.#logging?.warn?.(`[FallbackProvider] Transaction already known, returning tx hash`, {
-                        transactionHash: txHash,
-                    });
+                    const broadcastToAll =
+                        this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
+                    if (!broadcastToAll)
+                        // Only log if we're not broadcasting to all providers. If we are, we expect this to happen commonly.
+                        this.#logging?.warn?.(
+                            `[FallbackProvider] Transaction already known, returning tx hash: ${txHash}`,
+                            {
+                                transactionHash: txHash,
+                            },
+                        );
 
                     // Simulate successful eth_sendRawTransaction call
                     return txHash;
