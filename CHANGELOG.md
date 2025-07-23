@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.7.1 (2025-JUL-23)
+
+- Remove logging of "already known" errors when broadcasting to all providers: these errors are expected and common in that case, so logging them is unnecessary.
+
 ## v1.7.0 (2025-JUL-22)
 
 - When sending a transaction, if an underlying provider returns an "already known" error, the transaction hash will be returned instead of throwing an error.
