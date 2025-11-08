@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.7.2 (2025-NOV-07)
+
+- Only compute tx hash when absolutely necessary (when catching "already known" errors) to avoid unnecessary computation
+
 ## v1.7.1 (2025-JUL-23)
 
 - Remove logging of "already known" errors when broadcasting to all providers: these errors are expected and common in that case, so logging them is unnecessary.
