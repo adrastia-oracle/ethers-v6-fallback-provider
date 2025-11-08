@@ -458,33 +458,35 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 }
             }
 
-            let txHash: string | undefined;
-            if (method === "eth_sendRawTransaction" && Array.isArray(params) && typeof params[0] === "string") {
-                try {
-                    txHash = keccak256(params[0]); // raw tx hash
-                } catch (hashErr) {
-                    this.#logging?.warn?.("[FallbackProvider] Failed to compute tx hash from raw tx", {
-                        rawTx: params[0],
-                        error: hashErr,
-                    });
-                }
-            }
-
             const providerPromise = provider.send(method, params).catch((e: any) => {
-                if (txHash && isAlreadyKnownError(e)) {
-                    const broadcastToAll =
-                        this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
-                    if (!broadcastToAll)
-                        // Only log if we're not broadcasting to all providers. If we are, we expect this to happen commonly.
-                        this.#logging?.warn?.(
-                            `[FallbackProvider] Transaction already known, returning tx hash: ${txHash}`,
-                            {
-                                transactionHash: txHash,
-                            },
-                        );
+                if (isAlreadyKnownError(e)) {
+                    let txHash: string | undefined;
+                    if (method === "eth_sendRawTransaction" && Array.isArray(params) && typeof params[0] === "string") {
+                        try {
+                            txHash = keccak256(params[0]); // raw tx hash
+                        } catch (hashErr) {
+                            this.#logging?.warn?.("[FallbackProvider] Failed to compute tx hash from raw tx", {
+                                rawTx: params[0],
+                                error: hashErr,
+                            });
+                        }
+                    }
 
-                    // Simulate successful eth_sendRawTransaction call
-                    return txHash;
+                    if (txHash) {
+                        const broadcastToAll =
+                            this.#fallbackOptions.broadcastToAll ?? DEFAULT_FALLBACK_OPTIONS.broadcastToAll;
+                        if (!broadcastToAll)
+                            // Only log if we're not broadcasting to all providers. If we are, we expect this to happen commonly.
+                            this.#logging?.warn?.(
+                                `[FallbackProvider] Transaction already known, returning tx hash: ${txHash}`,
+                                {
+                                    transactionHash: txHash,
+                                },
+                            );
+
+                        // Simulate successful eth_sendRawTransaction call
+                        return txHash;
+                    }
                 }
 
                 throw e;
