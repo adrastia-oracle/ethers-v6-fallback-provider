@@ -118,6 +118,25 @@ export type FallbackProviderOptions = {
     broadcastToAll?: boolean;
 
     /**
+     * Configuration options for broadcasting to all providers.
+     */
+    broadcastToAllConfig?: {
+        /**
+         * The delay in milliseconds to wait between broadcasting the transaction to each provider.
+         *
+         * Default: 0 (no delay)
+         */
+        delay?: number;
+
+        /**
+         * The maximum jitter in milliseconds to add to the delay between broadcasting the transaction to each provider.
+         *
+         * Default: 0 (no jitter)
+         */
+        delayJitter?: number;
+    };
+
+    /**
      * If true, the provider will only broadcast signed transactions to MEV-protected providers. Default: false.
      */
     broadcastOnlyToMevProtected?: boolean;
@@ -146,6 +165,10 @@ export const DEFAULT_FALLBACK_OPTIONS: FallbackProviderOptions = {
     broadcastToAll: false,
     broadcastOnlyToMevProtected: false,
     throwOnFirstBlockchainError: true,
+    broadcastToAllConfig: {
+        delay: 0,
+        delayJitter: 0,
+    },
 };
 
 export function isBlockchainError(e: any): boolean {
@@ -605,13 +628,25 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 // Broadcast to all providers.
                 const providerPromises = new Array();
 
-                const promises = providersToUse.map((provider) =>
-                    this.sendWithProvider([provider], 0, method, params, providerPromises).catch((e) => {
-                        // Attach the list of provider IDs to the error.
-                        e.providerIds = providersToUse.map((p) => p.id);
+                const delay =
+                    this.#fallbackOptions.broadcastToAllConfig?.delay ??
+                    DEFAULT_FALLBACK_OPTIONS.broadcastToAllConfig?.delay!;
+                const delayJitter =
+                    this.#fallbackOptions.broadcastToAllConfig?.delayJitter ??
+                    DEFAULT_FALLBACK_OPTIONS.broadcastToAllConfig?.delayJitter!;
 
-                        throw e;
-                    }),
+                const promises = providersToUse.map((provider, index) =>
+                    (index > 0 && delay > 0
+                        ? wait(delay + Math.round(Math.random() * delayJitter))
+                        : Promise.resolve()
+                    ).then(() =>
+                        this.sendWithProvider([provider], 0, method, params, providerPromises).catch((e) => {
+                            // Attach the list of provider IDs to the error.
+                            e.providerIds = providersToUse.map((p) => p.id);
+
+                            throw e;
+                        }),
+                    ),
                 );
 
                 try {
