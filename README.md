@@ -45,3 +45,44 @@ const provider = new FallbackProvider([
 // You can now use the fallback provider as a classic provider
 const blockNumber = await provider.getBlockNumber();
 ```
+
+### Provider capabilities
+
+Each provider can declare which JSON-RPC methods it is able to serve. Use `supportedMethods` to restrict a provider to an
+explicit list of methods, and `unsupportedMethods` to exclude specific methods. Providers that cannot serve the requested
+method are skipped entirely.
+
+```typescript
+const provider = new FallbackProvider([
+    {
+        // A specialized endpoint that can only serve receipts.
+        provider: new JsonRpcProvider("https://receipts.example.com"),
+        supportedMethods: ["eth_getTransactionReceipt"],
+    },
+    {
+        // A general-purpose endpoint that serves everything except transaction broadcasting.
+        provider: new JsonRpcProvider("https://archive.example.com"),
+        unsupportedMethods: ["eth_sendRawTransaction"],
+    },
+    {
+        provider: getDefaultProvider("mainnet"),
+    },
+]);
+```
+
+Notes:
+
+- Method names are matched exactly. Wildcards and patterns are not supported.
+- `unsupportedMethods` takes precedence over `supportedMethods`.
+- Every provider is assumed to support `eth_chainId` and `eth_blockNumber`. These methods are always served, even if they
+  are omitted from `supportedMethods` or listed in `unsupportedMethods`, because network detection and liveliness checks
+  depend on them.
+- Capabilities do not affect liveliness checks: a restricted provider still contributes to the block number median and
+  can still be marked as active.
+- If no provider supports the requested method, the call throws `All providers are unavailable`. The thrown error carries
+  an `unsupportedMethod` property naming the method.
+
+> **Caveat:** ethers' high-level APIs and event polling issue methods you may not anticipate, such as
+> `eth_getBlockByNumber`, `eth_getLogs`, `eth_call`, `eth_estimateGas`, and `eth_getTransactionCount`. An overly narrow
+> `supportedMethods` list applied to _all_ of your providers will make those calls fail. Restrict individual providers
+> and keep at least one general-purpose provider in the list.

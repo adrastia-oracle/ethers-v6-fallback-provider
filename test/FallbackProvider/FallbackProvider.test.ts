@@ -3,9 +3,12 @@ import {
     FallbackProvider,
     FallbackProviderError,
     FallbackProviderOptions,
+    filterProvidersByMethod,
     filterValidProviders,
     getBlockNumber,
     getBlockNumbersAndMedian,
+    ProviderConfig,
+    providerSupportsMethod,
 } from "../../src/FallbackProvider";
 import { wait } from "../../src/utils/promises";
 import FailingProvider from "./helpers/FailingProvider";
@@ -1965,6 +1968,302 @@ describe("FallbackProvider", () => {
                 expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
                 expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
                 expect(res).toEqual("2");
+            });
+        });
+    });
+
+    describe("providerSupportsMethod", () => {
+        const makeConfig = (capabilities: Partial<ProviderConfig> = {}): ProviderConfig => ({
+            provider: new MockProvider("1"),
+            ...capabilities,
+        });
+
+        it("Should support any method when no capabilities are configured", () => {
+            expect(providerSupportsMethod(makeConfig(), "eth_call")).toBe(true);
+        });
+
+        it("Should only support the methods in supportedMethods", () => {
+            const config = makeConfig({ supportedMethods: ["eth_getTransactionReceipt"] });
+
+            expect(providerSupportsMethod(config, "eth_getTransactionReceipt")).toBe(true);
+            expect(providerSupportsMethod(config, "eth_call")).toBe(false);
+        });
+
+        it("Should not support the methods in unsupportedMethods", () => {
+            const config = makeConfig({ unsupportedMethods: ["eth_call"] });
+
+            expect(providerSupportsMethod(config, "eth_call")).toBe(false);
+            expect(providerSupportsMethod(config, "eth_getLogs")).toBe(true);
+        });
+
+        it("Should let unsupportedMethods take precedence over supportedMethods", () => {
+            const config = makeConfig({ supportedMethods: ["eth_call"], unsupportedMethods: ["eth_call"] });
+
+            expect(providerSupportsMethod(config, "eth_call")).toBe(false);
+        });
+
+        it("Should support only the always-supported methods with an empty supportedMethods list", () => {
+            const config = makeConfig({ supportedMethods: [] });
+
+            expect(providerSupportsMethod(config, "eth_call")).toBe(false);
+            expect(providerSupportsMethod(config, "eth_chainId")).toBe(true);
+            expect(providerSupportsMethod(config, "eth_blockNumber")).toBe(true);
+        });
+
+        it("Should support the always-supported methods when they're missing from supportedMethods", () => {
+            const config = makeConfig({ supportedMethods: ["eth_getTransactionReceipt"] });
+
+            expect(providerSupportsMethod(config, "eth_chainId")).toBe(true);
+            expect(providerSupportsMethod(config, "eth_blockNumber")).toBe(true);
+        });
+
+        it("Should support the always-supported methods even when they're in unsupportedMethods", () => {
+            const config = makeConfig({ unsupportedMethods: ["eth_chainId", "eth_blockNumber"] });
+
+            expect(providerSupportsMethod(config, "eth_chainId")).toBe(true);
+            expect(providerSupportsMethod(config, "eth_blockNumber")).toBe(true);
+        });
+    });
+
+    describe("filterProvidersByMethod", () => {
+        it("Should return the same array instance for always-supported methods", () => {
+            const configs: ProviderConfig[] = [
+                { provider: new MockProvider("1"), supportedMethods: [] },
+                { provider: new MockProvider("2") },
+            ];
+
+            expect(filterProvidersByMethod(configs, "eth_blockNumber")).toBe(configs);
+            expect(filterProvidersByMethod(configs, "eth_chainId")).toBe(configs);
+        });
+
+        it("Should keep every provider, in order, when no capabilities are configured", () => {
+            const configs: ProviderConfig[] = [
+                { provider: new MockProvider("1") },
+                { provider: new MockProvider("2") },
+            ];
+
+            const filtered = filterProvidersByMethod(configs, "eth_call");
+
+            expect(filtered).toHaveLength(2);
+            expect(filtered[0]).toBe(configs[0]);
+            expect(filtered[1]).toBe(configs[1]);
+        });
+    });
+
+    describe("Provider capabilities", () => {
+        let provider: FallbackProvider;
+
+        afterEach(() => {
+            if (provider) {
+                provider.destroy();
+            }
+        });
+
+        it("Should route each method to a provider that supports it", async () => {
+            const provider1 = new MockProvider("1");
+            const provider2 = new MockProvider("2");
+            provider = new FallbackProvider([
+                { provider: provider1, supportedMethods: ["eth_getTransactionReceipt"] },
+                { provider: provider2 },
+            ]);
+
+            expect(await provider.send("eth_call", {})).toEqual("2");
+            expect(await provider.send("eth_getTransactionReceipt", {})).toEqual("1");
+        });
+
+        it("Should not call a provider that doesn't support the method", async () => {
+            const provider1 = new MockProvider("1");
+            const provider2 = new MockProvider("2");
+            provider = new FallbackProvider([
+                { provider: provider1, unsupportedMethods: ["eth_call"] },
+                { provider: provider2 },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            const res = await provider.send("eth_call", {});
+
+            expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+            expect(res).toEqual("2");
+        });
+
+        it("Should throw if no provider supports the method", async () => {
+            const provider1 = new MockProvider("1");
+            const provider2 = new MockProvider("2");
+            provider = new FallbackProvider([
+                { provider: provider1, unsupportedMethods: ["eth_call"] },
+                { provider: provider2, unsupportedMethods: ["eth_call"] },
+            ]);
+
+            jest.spyOn(provider1, "sendNonBlockNumberCall");
+            jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+            await expect(provider.send("eth_call", {})).rejects.toThrowError(
+                FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE,
+            );
+
+            expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+        });
+
+        it("Should attach the unsupported method and the provider IDs to the error", async () => {
+            const provider1 = new MockProvider("1");
+            const provider2 = new MockProvider("2");
+            provider = new FallbackProvider([
+                { provider: provider1, supportedMethods: ["eth_getTransactionReceipt"] },
+                { provider: provider2, supportedMethods: ["eth_getTransactionReceipt"] },
+            ]);
+
+            const error = await provider.send("eth_call", {}).catch((e) => e);
+
+            expect(error.message).toEqual(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
+            expect(error.unsupportedMethod).toEqual("eth_call");
+            expect(error.providerIds).toEqual(["0", "1"]);
+        });
+
+        it("Should only attach the IDs of capable providers to a failed call's error", async () => {
+            const provider1 = new FailingProvider("1");
+            const provider2 = new MockProvider("2");
+            provider = new FallbackProvider([
+                { provider: provider1 },
+                { provider: provider2, unsupportedMethods: ["eth_call"] },
+            ]);
+
+            const error = await provider.send("eth_call", {}).catch((e) => e);
+
+            expect(error.message).toContain("Failing provider used: 1");
+            expect(error.providerIds).toEqual(["0"]);
+        });
+
+        it("Should still serve the always-supported methods when every provider is restricted", async () => {
+            const provider1 = new MockProvider("1", 1, 123);
+            const provider2 = new MockProvider("2", 1, 123);
+            provider = new FallbackProvider([
+                { provider: provider1, supportedMethods: ["eth_getTransactionReceipt"] },
+                { provider: provider2, supportedMethods: ["eth_getTransactionReceipt"] },
+            ]);
+
+            expect(await provider.send("eth_blockNumber", {})).toEqual(123);
+            expect(await provider.send("eth_chainId", {})).toEqual(1n);
+        });
+
+        it("Should not exclude restricted providers from the liveliness check", async () => {
+            const provider1 = new MockProvider("1", 1, 100);
+            const provider2 = new MockProvider("2", 1, 100);
+            provider = new FallbackProvider(
+                [
+                    {
+                        provider: provider1,
+                        timeout: LIVELINESS_PROVIDER_TIMEOUT,
+                        supportedMethods: ["eth_getTransactionReceipt"],
+                    },
+                    { provider: provider2, timeout: LIVELINESS_PROVIDER_TIMEOUT },
+                ],
+                undefined,
+                undefined,
+                undefined,
+                LIVELINESS_FALLBACK_OPTIONS,
+            );
+
+            // Wait some time for the liveliness check to run
+            await wait(LIVELINESS_PROVIDER_TIMEOUT + LIVELINESS_FALLBACK_OPTIONS.livelinessPollingInterval! + 250);
+
+            expect(provider.activeProvidersCount()).toEqual(2);
+            expect(await provider.send("eth_getTransactionReceipt", {})).toEqual("1");
+        });
+
+        describe("Broadcasting", () => {
+            const BROADCAST_TO_ALL_OPTIONS: FallbackProviderOptions = {
+                broadcastToAll: true,
+                broadcastToAllConfig: { delay: 0, delayJitter: 0 },
+            };
+
+            it("Should only broadcast to the providers that support the method", async () => {
+                // The capable providers are delayed so that all of them are dispatched before any of them resolves.
+                const provider1 = new MockProvider("1");
+                const provider2 = new MockProvider("2", 1, 1, 50);
+                const provider3 = new MockProvider("3", 1, 1, 50);
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, unsupportedMethods: ["eth_sendRawTransaction"] },
+                        { provider: provider2 },
+                        { provider: provider3 },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    BROADCAST_TO_ALL_OPTIONS,
+                );
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+                jest.spyOn(provider3, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider3.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(res).toEqual("2");
+            });
+
+            it("Should filter by capability before filtering by MEV protection", async () => {
+                const provider1 = new MockProvider("1");
+                const provider2 = new MockProvider("2");
+                provider = new FallbackProvider(
+                    [
+                        {
+                            provider: provider1,
+                            isMevProtected: true,
+                            unsupportedMethods: ["eth_sendRawTransaction"],
+                        },
+                        { provider: provider2, isMevProtected: false },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    { ...BROADCAST_TO_ALL_OPTIONS, broadcastOnlyToMevProtected: true },
+                );
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                await expect(provider.send("eth_sendRawTransaction", {})).rejects.toThrowError(
+                    FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE,
+                );
+
+                expect(provider1.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+            });
+
+            it("Should broadcast to the MEV-protected providers that support the method", async () => {
+                const provider1 = new MockProvider("1");
+                const provider2 = new MockProvider("2");
+                provider = new FallbackProvider(
+                    [
+                        { provider: provider1, isMevProtected: true },
+                        {
+                            provider: provider2,
+                            isMevProtected: true,
+                            unsupportedMethods: ["eth_sendRawTransaction"],
+                        },
+                    ],
+                    undefined,
+                    undefined,
+                    undefined,
+                    { ...BROADCAST_TO_ALL_OPTIONS, broadcastOnlyToMevProtected: true },
+                );
+
+                jest.spyOn(provider1, "sendNonBlockNumberCall");
+                jest.spyOn(provider2, "sendNonBlockNumberCall");
+
+                const res = await provider.send("eth_sendRawTransaction", {});
+
+                expect(provider1.sendNonBlockNumberCall).toHaveBeenCalledTimes(1);
+                expect(provider2.sendNonBlockNumberCall).not.toHaveBeenCalled();
+                expect(res).toEqual("1");
             });
         });
     });

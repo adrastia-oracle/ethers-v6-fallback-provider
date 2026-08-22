@@ -28,6 +28,9 @@ export const DEFAULT_RETRIES = 0;
 export const DEFAULT_TIMEOUT = 3_000;
 export const RETRY_DELAY = 100;
 
+// Network detection and liveliness checks depend on these, so every provider is assumed to serve them.
+export const ALWAYS_SUPPORTED_METHODS: readonly string[] = ["eth_chainId", "eth_blockNumber"];
+
 export interface ProviderConfig {
     provider: JsonRpcApiProvider;
     retries?: number;
@@ -35,6 +38,18 @@ export interface ProviderConfig {
     retryDelay?: number;
     id?: string;
     isMevProtected?: boolean;
+
+    /**
+     * The JSON-RPC methods this provider is allowed to serve, matched exactly. If undefined, the provider may serve
+     * any method. Methods in ALWAYS_SUPPORTED_METHODS are served regardless.
+     */
+    supportedMethods?: string[];
+
+    /**
+     * The JSON-RPC methods this provider must not serve, matched exactly. Takes precedence over supportedMethods.
+     * Methods in ALWAYS_SUPPORTED_METHODS are served regardless.
+     */
+    unsupportedMethods?: string[];
 
     /**
      * Gets the stored block number when conducting a liveliness check.
@@ -213,6 +228,22 @@ export function isAlreadyKnownError(e: any): boolean {
     return msg.toLowerCase().includes("already known");
 }
 
+export const providerSupportsMethod = (config: ProviderConfig, method: string): boolean => {
+    if (ALWAYS_SUPPORTED_METHODS.includes(method)) return true;
+
+    if (config.unsupportedMethods?.includes(method)) return false;
+
+    if (config.supportedMethods !== undefined && !config.supportedMethods.includes(method)) return false;
+
+    return true;
+};
+
+export const filterProvidersByMethod = (providers: ProviderConfig[], method: string): ProviderConfig[] => {
+    if (ALWAYS_SUPPORTED_METHODS.includes(method)) return providers;
+
+    return providers.filter((provider) => providerSupportsMethod(provider, method));
+};
+
 export const filterValidProviders = async (providers: ProviderConfig[]) => {
     if (providers.length === 0) throw new Error(FallbackProviderError.NO_PROVIDER);
 
@@ -348,6 +379,7 @@ export class FallbackProvider extends JsonRpcApiProvider {
     #destroyed = false;
     #halted = false;
     #activeProviders: ProviderConfig[] = [];
+    #hasCapabilityConfig: boolean;
 
     #latestBlockDiscovery: {
         blockNumber: number | null;
@@ -378,6 +410,10 @@ export class FallbackProvider extends JsonRpcApiProvider {
                 provider.id = `${i}`;
             }
         });
+
+        this.#hasCapabilityConfig = this.#providers.some(
+            (provider) => provider.supportedMethods !== undefined || provider.unsupportedMethods !== undefined,
+        );
 
         this._start();
     }
@@ -605,6 +641,32 @@ export class FallbackProvider extends JsonRpcApiProvider {
         let providersToUse = this.#activeProviders;
         if (providersToUse.length === 0) {
             throw new Error(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
+        }
+
+        if (this.#hasCapabilityConfig) {
+            const capableProviders = filterProvidersByMethod(providersToUse, method);
+            if (capableProviders.length === 0) {
+                this.#logging?.warn?.(
+                    `[FallbackProvider] No provider supports the \`${method}\` method: ${providersToUse
+                        .map((p) => p.id)
+                        .join(", ")}`,
+                );
+
+                const error: any = new Error(FallbackProviderError.ALL_PROVIDERS_UNAVAILABLE);
+                error.providerIds = providersToUse.map((p) => p.id);
+                error.unsupportedMethod = method;
+
+                throw error;
+            } else if (capableProviders.length !== providersToUse.length) {
+                this.#logging?.debug?.(
+                    `[FallbackProvider] Skipping providers that do not support the \`${method}\` method: ${providersToUse
+                        .filter((p) => !capableProviders.includes(p))
+                        .map((p) => p.id)
+                        .join(", ")}`,
+                );
+            }
+
+            providersToUse = capableProviders;
         }
 
         if (method === "eth_chainId") {

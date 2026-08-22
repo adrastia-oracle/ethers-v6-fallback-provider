@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.9.0 (2026-AUG-22)
+
+- Add per-provider method capabilities via `supportedMethods` and `unsupportedMethods` on `ProviderConfig`
+- `eth_chainId` and `eth_blockNumber` are always assumed supported by every provider
+
 ## v1.7.2 (2025-NOV-07)
 
 - Only compute tx hash when absolutely necessary (when catching "already known" errors) to avoid unnecessary computation
